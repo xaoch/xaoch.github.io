@@ -1,0 +1,2771 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>JabRef references</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<script type="text/javascript">
+<!--
+// QuickSearch script for JabRef HTML export 
+// Version: 3.0
+//
+// Copyright (c) 2006-2011, Mark Schenk
+//
+// This software is distributed under a Creative Commons Attribution 3.0 License
+// http://creativecommons.org/licenses/by/3.0/
+//
+// Features:
+// - intuitive find-as-you-type searching
+//    ~ case insensitive
+//    ~ ignore diacritics (optional)
+//
+// - search with/without Regular Expressions
+// - match BibTeX key
+//
+
+// Search settings
+var searchAbstract = true;	// search in abstract
+var searchReview = true;	// search in review
+
+var noSquiggles = true; 	// ignore diacritics when searching
+var searchRegExp = false; 	// enable RegExp searches
+
+
+if (window.addEventListener) {
+	window.addEventListener("load",initSearch,false); }
+else if (window.attachEvent) {
+	window.attachEvent("onload", initSearch); }
+
+function initSearch() {
+	// check for quick search table and searchfield
+	if (!document.getElementById('qs_table')||!document.getElementById('quicksearch')) { return; }
+
+	// load all the rows and sort into arrays
+	loadTableData();
+	
+	//find the query field
+	qsfield = document.getElementById('qs_field');
+
+	// previous search term; used for speed optimisation
+	prevSearch = '';
+
+	//find statistics location
+	stats = document.getElementById('stat');
+	setStatistics(-1);
+	
+	// set up preferences
+	initPreferences();
+
+	// shows the searchfield
+	document.getElementById('quicksearch').style.display = 'block';
+	document.getElementById('qs_field').onkeyup = quickSearch;
+}
+
+function loadTableData() {
+	// find table and appropriate rows
+	searchTable = document.getElementById('qs_table');
+	var allRows = searchTable.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+	// split all rows into entryRows and infoRows (e.g. abstract, review, bibtex)
+	entryRows = new Array(); infoRows = new Array(); absRows = new Array(); revRows = new Array();
+
+	// get data from each row
+	entryRowsData = new Array(); absRowsData = new Array(); revRowsData = new Array(); 
+	
+	BibTeXKeys = new Array();
+	
+	for (var i=0, k=0, j=0; i<allRows.length;i++) {
+		if (allRows[i].className.match(/entry/)) {
+			entryRows[j] = allRows[i];
+			entryRowsData[j] = stripDiacritics(getTextContent(allRows[i]));
+			allRows[i].id ? BibTeXKeys[j] = allRows[i].id : allRows[i].id = 'autokey_'+j;
+			j ++;
+		} else {
+			infoRows[k++] = allRows[i];
+			// check for abstract/review
+			if (allRows[i].className.match(/abstract/)) {
+				absRows.push(allRows[i]);
+				absRowsData[j-1] = stripDiacritics(getTextContent(allRows[i]));
+			} else if (allRows[i].className.match(/review/)) {
+				revRows.push(allRows[i]);
+				revRowsData[j-1] = stripDiacritics(getTextContent(allRows[i]));
+			}
+		}
+	}
+	//number of entries and rows
+	numEntries = entryRows.length;
+	numInfo = infoRows.length;
+	numAbs = absRows.length;
+	numRev = revRows.length;
+}
+
+function quickSearch(){
+	
+	tInput = qsfield;
+
+	if (tInput.value.length == 0) {
+		showAll();
+		setStatistics(-1);
+		qsfield.className = '';
+		return;
+	} else {
+		t = stripDiacritics(tInput.value);
+
+		if(!searchRegExp) { t = escapeRegExp(t); }
+			
+		// only search for valid RegExp
+		try {
+			textRegExp = new RegExp(t,"i");
+			closeAllInfo();
+			qsfield.className = '';
+		}
+			catch(err) {
+			prevSearch = tInput.value;
+			qsfield.className = 'invalidsearch';
+			return;
+		}
+	}
+	
+	// count number of hits
+	var hits = 0;
+
+	// start looping through all entry rows
+	for (var i = 0; cRow = entryRows[i]; i++){
+
+		// only show search the cells if it isn't already hidden OR if the search term is getting shorter, then search all
+		if(cRow.className.indexOf('noshow')==-1 || tInput.value.length <= prevSearch.length){
+			var found = false; 
+
+			if (entryRowsData[i].search(textRegExp) != -1 || BibTeXKeys[i].search(textRegExp) != -1){ 
+				found = true;
+			} else {
+				if(searchAbstract && absRowsData[i]!=undefined) {
+					if (absRowsData[i].search(textRegExp) != -1){ found=true; } 
+				}
+				if(searchReview && revRowsData[i]!=undefined) {
+					if (revRowsData[i].search(textRegExp) != -1){ found=true; } 
+				}
+			}
+			
+			if (found){
+				cRow.className = 'entry show';
+				hits++;
+			} else {
+				cRow.className = 'entry noshow';
+			}
+		}
+	}
+
+	// update statistics
+	setStatistics(hits)
+	
+	// set previous search value
+	prevSearch = tInput.value;
+}
+
+
+// Strip Diacritics from text
+// http://stackoverflow.com/questions/990904/javascript-remove-accents-in-strings
+
+// String containing replacement characters for stripping accents 
+var stripstring = 
+    'AAAAAAACEEEEIIII'+
+    'DNOOOOO.OUUUUY..'+
+    'aaaaaaaceeeeiiii'+
+    'dnooooo.ouuuuy.y'+
+    'AaAaAaCcCcCcCcDd'+
+    'DdEeEeEeEeEeGgGg'+
+    'GgGgHhHhIiIiIiIi'+
+    'IiIiJjKkkLlLlLlL'+
+    'lJlNnNnNnnNnOoOo'+
+    'OoOoRrRrRrSsSsSs'+
+    'SsTtTtTtUuUuUuUu'+
+    'UuUuWwYyYZzZzZz.';
+
+function stripDiacritics(str){
+
+    if(noSquiggles==false){
+        return str;
+    }
+
+    var answer='';
+    for(var i=0;i<str.length;i++){
+        var ch=str[i];
+        var chindex=ch.charCodeAt(0)-192;   // Index of character code in the strip string
+        if(chindex>=0 && chindex<stripstring.length){
+            // Character is within our table, so we can strip the accent...
+            var outch=stripstring.charAt(chindex);
+            // ...unless it was shown as a '.'
+            if(outch!='.')ch=outch;
+        }
+        answer+=ch;
+    }
+    return answer;
+}
+
+// http://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
+// NOTE: must escape every \ in the export code because of the JabRef Export...
+function escapeRegExp(str) {
+  return str.replace(/[-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+}
+
+function toggleInfo(articleid,info) {
+
+	var entry = document.getElementById(articleid);
+	var abs = document.getElementById('abs_'+articleid);
+	var rev = document.getElementById('rev_'+articleid);
+	var bib = document.getElementById('bib_'+articleid);
+	
+	if (abs && info == 'abstract') {
+		abs.className.indexOf('noshow') == -1?abs.className = 'abstract noshow':abs.className = 'abstract show';
+	} else if (rev && info == 'review') {
+		rev.className.indexOf('noshow') == -1?rev.className = 'review noshow':rev.className = 'review show';
+	} else if (bib && info == 'bibtex') {
+		bib.className.indexOf('noshow') == -1?bib.className = 'bibtex noshow':bib.className = 'bibtex show';
+	} else { 
+		return;
+	}
+
+	// check if one or the other is available
+	var revshow; var absshow; var bibshow;
+	(abs && abs.className.indexOf('noshow') == -1)? absshow = true: absshow = false;
+	(rev && rev.className.indexOf('noshow') == -1)? revshow = true: revshow = false;	
+	(bib && bib.className.indexOf('noshow') == -1)? bibshow = true: bibshow = false;
+	
+	// highlight original entry
+	if(entry) {
+		if (revshow || absshow || bibshow) {
+		entry.className = 'entry highlight show';
+		} else {
+		entry.className = 'entry show';
+		}
+	}
+	
+	// When there's a combination of abstract/review/bibtex showing, need to add class for correct styling
+	if(absshow) {
+		(revshow||bibshow)?abs.className = 'abstract nextshow':abs.className = 'abstract';
+	} 
+	if (revshow) {
+		bibshow?rev.className = 'review nextshow': rev.className = 'review';
+	}	
+	
+}
+
+function setStatistics (hits) {
+	if(hits < 0) { hits=numEntries; }
+	if(stats) { stats.firstChild.data = hits + '/' + numEntries}
+}
+
+function getTextContent(node) {
+	// Function written by Arve Bersvendsen
+	// http://www.virtuelvis.com
+	
+	if (node.nodeType == 3) {
+	return node.nodeValue;
+	} // text node
+	if (node.nodeType == 1 && node.className != "infolinks") { // element node
+	var text = [];
+	for (var chld = node.firstChild;chld;chld=chld.nextSibling) {
+		text.push(getTextContent(chld));
+	}
+	return text.join("");
+	} return ""; // some other node, won't contain text nodes.
+}
+
+function showAll(){
+	closeAllInfo();
+	for (var i = 0; i < numEntries; i++){ entryRows[i].className = 'entry show'; }
+}
+
+function closeAllInfo(){
+	for (var i=0; i < numInfo; i++){
+		if (infoRows[i].className.indexOf('noshow') ==-1) {
+			infoRows[i].className = infoRows[i].className + ' noshow';
+		}
+	}
+}
+
+function clearQS() {
+	qsfield.value = '';
+	showAll();
+}
+
+function redoQS(){
+	showAll();
+	quickSearch(qsfield);
+}
+
+function updateSetting(obj){
+	var option = obj.id;
+	var checked = obj.value;
+
+	switch(option)
+	 {
+	 case "opt_searchAbs":
+	   searchAbstract=!searchAbstract;
+	   redoQS();
+	   break;
+	 case "opt_searchRev":
+	   searchReview=!searchReview;
+	   redoQS();
+	   break;
+	 case "opt_useRegExp":
+	   searchRegExp=!searchRegExp;
+	   redoQS();
+	   break;
+	 case "opt_noAccents":
+	   noSquiggles=!noSquiggles;
+	   loadTableData();
+	   redoQS();
+	   break;
+	 }
+}
+
+function initPreferences(){
+	if(searchAbstract){document.getElementById("opt_searchAbs").checked = true;}
+	if(searchReview){document.getElementById("opt_searchRev").checked = true;}
+	if(noSquiggles){document.getElementById("opt_noAccents").checked = true;}
+	if(searchRegExp){document.getElementById("opt_useRegExp").checked = true;}
+	
+	if(numAbs==0) {document.getElementById("opt_searchAbs").parentNode.style.display = 'none';}
+	if(numRev==0) {document.getElementById("opt_searchRev").parentNode.style.display = 'none';}
+}
+
+function toggleSettings(){
+	var togglebutton = document.getElementById('showsettings');
+	var settings = document.getElementById('settings');
+	
+	if(settings.className == "hidden"){
+		settings.className = "show";
+		togglebutton.innerText = "close settings";
+		togglebutton.textContent = "close settings";
+	}else{
+		settings.className = "hidden";
+		togglebutton.innerText = "settings...";		
+		togglebutton.textContent = "settings...";
+	}
+}
+
+-->
+</script>
+<style type="text/css">
+body { background-color: white; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.2; padding: 1em; color: #2E2E2E; margin: auto 2em; }
+
+form#quicksearch { width: auto; border-style: solid; border-color: gray; border-width: 1px 0px; padding: 0.7em 0.5em; display:none; position:relative; }
+span#searchstat {padding-left: 1em;}
+
+div#settings { margin-top:0.7em; /* border-bottom: 1px transparent solid; background-color: #efefef; border: 1px grey solid; */ }
+div#settings ul {margin: 0; padding: 0; }
+div#settings li {margin: 0; padding: 0 1em 0 0; display: inline; list-style: none; }
+div#settings li + li { border-left: 2px #efefef solid; padding-left: 0.5em;}
+div#settings input { margin-bottom: 0px;}
+
+div#settings.hidden {display:none;}
+
+#showsettings { border: 1px grey solid; padding: 0 0.5em; float:right; line-height: 1.6em; text-align: right; }
+#showsettings:hover { cursor: pointer; }
+
+.invalidsearch { background-color: red; }
+input[type="button"] { background-color: #efefef; border: 1px #2E2E2E solid;}
+
+table { width: 100%; empty-cells: show; border-spacing: 0em 0.2em; margin: 1em 0em; border-style: none; }
+th, td { border: 1px gray solid; border-width: 1px 1px; padding: 0.5em; vertical-align: top; text-align: left; }
+th { background-color: #efefef; }
+td + td, th + th { border-left: none; }
+
+td a { color: navy; text-decoration: none; }
+td a:hover  { text-decoration: underline; }
+
+tr.noshow { display: none;}
+tr.highlight td { background-color: #EFEFEF; border-top: 2px #2E2E2E solid; font-weight: bold; }
+tr.abstract td, tr.review td, tr.bibtex td { background-color: #EFEFEF; text-align: justify; border-bottom: 2px #2E2E2E solid; }
+tr.nextshow td { border-bottom: 1px gray solid; }
+
+tr.bibtex pre { width: 100%; overflow: auto; white-space: pre-wrap;}
+p.infolinks { margin: 0.3em 0em 0em 0em; padding: 0px; }
+
+@media print {
+	p.infolinks, #qs_settings, #quicksearch, t.bibtex { display: none !important; }
+	tr { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<form action="" id="quicksearch">
+<input type="text" id="qs_field" autocomplete="off" placeholder="Type to search..." /> <input type="button" onclick="clearQS()" value="clear" />
+<span id="searchstat">Matching entries: <span id="stat">0</span></span>
+<div id="showsettings" onclick="toggleSettings()">settings...</div>
+<div id="settings" class="hidden">
+<ul>
+<li><input type="checkbox" class="search_setting" id="opt_searchAbs" onchange="updateSetting(this)"><label for="opt_searchAbs"> include abstract</label></li>
+<li><input type="checkbox" class="search_setting" id="opt_searchRev" onchange="updateSetting(this)"><label for="opt_searchRev"> include review</label></li>
+<li><input type="checkbox" class="search_setting" id="opt_useRegExp" onchange="updateSetting(this)"><label for="opt_useRegExp"> use RegExp</label></li>
+<li><input type="checkbox" class="search_setting" id="opt_noAccents" onchange="updateSetting(this)"><label for="opt_noAccents"> ignore accents</label></li>
+</ul>
+</div>
+</form>
+<table id="qs_table" border="1">
+<thead><tr><th width="20%">Author</th><th width="30%">Title</th><th width="5%">Year</th><th width="30%">Journal/Proceedings</th><th width="10%">Reftype</th><th width="5%">DOI/URL</th></tr></thead>
+<tbody><tr id="Jurado20181" class="entry">
+	<td>Jurado, D., Maya, R., Dominguez, F. and Ochoa, X.</td>
+	<td>Automated capture of paper-based evaluations to provide early feedback to students <p class="infolinks">[<a href="javascript:toggleInfo('Jurado20181','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>2017 IEEE 2nd Ecuador Technical Chapters Meeting, ETCM 2017<br/>Vol. 2017-January, pp. 1-6&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/ETCM.2017.8247489">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85045726401&doi=10.1109%2fETCM.2017.8247489&partnerID=40&md5=30c6d4e059a1696710a0a01090a2d939">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Jurado20181" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Jurado20181,
+  author = {Jurado, D. and Maya, R. and Dominguez, F. and Ochoa, X.},
+  title = {Automated capture of paper-based evaluations to provide early feedback to students},
+  journal = {2017 IEEE 2nd Ecuador Technical Chapters Meeting, ETCM 2017},
+  year = {2018},
+  volume = {2017-January},
+  pages = {1-6},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85045726401&amp;doi=10.1109%2fETCM.2017.8247489&amp;partnerID=40&amp;md5=30c6d4e059a1696710a0a01090a2d939},
+  doi = {https://doi.org/10.1109/ETCM.2017.8247489}
+}
+</pre></td>
+</tr>
+<tr id="lucas2018virtual" class="entry">
+	<td>Lucas, P., Vaca, D., Dom\inguez, F. and Ochoa, X.</td>
+	<td>Virtual Circuits: An Augmented Reality Circuit Simulator for Engineering Students <p class="infolinks">[<a href="javascript:toggleInfo('lucas2018virtual','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>2018 IEEE 18th International Conference on Advanced Learning Technologies (ICALT), pp. 380-384&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_lucas2018virtual" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{lucas2018virtual,
+  author = {Lucas, Pedro and Vaca, David and Dom\inguez, Federico and Ochoa, Xavier},
+  title = {Virtual Circuits: An Augmented Reality Circuit Simulator for Engineering Students},
+  booktitle = {2018 IEEE 18th International Conference on Advanced Learning Technologies (ICALT)},
+  year = {2018},
+  pages = {380--384}
+}
+</pre></td>
+</tr>
+<tr id="maldonado2018lala" class="entry">
+	<td>Maldonado-Mahauad, J., Hilliger, I., Pérez-Sanagustín, M., Millecamp, M., Verbert, K. and Ochoa, X.</td>
+	<td>The LALA Project: Building Capacity to Use Learning Analytics to Improve Higher Education in Latin America <p class="infolinks">[<a href="javascript:toggleInfo('maldonado2018lala','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>Companion Proceedings of the 8th International Learning Analytics &amp; Knowledge Conference., pp. 630-637&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_maldonado2018lala" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{maldonado2018lala,
+  author = {Maldonado-Mahauad, Jorge and Hilliger, Isabel and Pérez-Sanagustín, Mar and Millecamp, Martijn and Verbert, Katrien and Ochoa, Xavier},
+  title = {The LALA Project: Building Capacity to Use Learning Analytics to Improve Higher Education in Latin America},
+  booktitle = {Companion Proceedings of the 8th International Learning Analytics &amp; Knowledge Conference.},
+  year = {2018},
+  pages = {630--637}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa:2018:RSA:3170358.3170406" class="entry">
+	<td>Ochoa, X., Dom\inguez, F., Guam&aacute;n, B., Maya, R., Falcones, G. and Castells, J.</td>
+	<td>The RAP System: Automatic Feedback of Oral Presentation Skills Using Multimodal Analysis and Low-cost Sensors <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa:2018:RSA:3170358.3170406','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>Proceedings of the 8th International Conference on Learning Analytics and Knowledge, pp. 360-364&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/3170358.3170406">DOI</a> <a href="http://doi.acm.org/10.1145/3170358.3170406">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa:2018:RSA:3170358.3170406" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa:2018:RSA:3170358.3170406,
+  author = {Ochoa, Xavier and Dom\inguez, Federico and Guam&aacute;n, Bruno and Maya, Ricardo and Falcones, Gabriel and Castells, Jaime},
+  title = {The RAP System: Automatic Feedback of Oral Presentation Skills Using Multimodal Analysis and Low-cost Sensors},
+  booktitle = {Proceedings of the 8th International Conference on Learning Analytics and Knowledge},
+  publisher = {ACM},
+  year = {2018},
+  pages = {360--364},
+  url = {http://doi.acm.org/10.1145/3170358.3170406},
+  doi = {https://doi.org/10.1145/3170358.3170406}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa20181" class="entry">
+	<td>Ochoa, X., Chiluiza, K., Granda, R., Falcones, G., Castells, J. and Guamán, B.</td>
+	<td>Multimodal transcript of face-to-face group-work activity around interactive tabletops <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa20181','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>CEUR Workshop Proceedings<br/>Vol. 2163, pp. 1-6&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85051924821&partnerID=40&md5=94453e9b450b08cafa2e3cfdd353b2b3">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa20181" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa20181,
+  author = {Ochoa, X. and Chiluiza, K. and Granda, R. and Falcones, G. and Castells, J. and Guamán, B.},
+  title = {Multimodal transcript of face-to-face group-work activity around interactive tabletops},
+  journal = {CEUR Workshop Proceedings},
+  year = {2018},
+  volume = {2163},
+  pages = {1-6},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85051924821&amp;partnerID=40&amp;md5=94453e9b450b08cafa2e3cfdd353b2b3}
+}
+</pre></td>
+</tr>
+<tr id="Shum2018iii" class="entry">
+	<td>Shum, S., Ferguson, R., Merceron, A. and Ochoa, X.</td>
+	<td>LAK 2018 program chairs’ welcome <p class="infolinks">[<a href="javascript:toggleInfo('Shum2018iii','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>ACM International Conference Proceeding Series, pp. iii-iv&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85046058726&partnerID=40&md5=47e3e9fd9219140260c7b81582d5a786">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Shum2018iii" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Shum2018iii,
+  author = {Shum, S.B. and Ferguson, R. and Merceron, A. and Ochoa, X.},
+  title = {LAK 2018 program chairs’ welcome},
+  journal = {ACM International Conference Proceeding Series},
+  year = {2018},
+  pages = {iii-iv},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85046058726&amp;partnerID=40&amp;md5=47e3e9fd9219140260c7b81582d5a786}
+}
+</pre></td>
+</tr>
+<tr id="Torres20181" class="entry">
+	<td>Torres, J., Ochoa, A., Jimenez, A., Garcia, S., Pelaez, E. and Ochoa, X.</td>
+	<td>Characterizing discussions in the Spanish Wikipedia <p class="infolinks">[<a href="javascript:toggleInfo('Torres20181','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>2017 IEEE 2nd Ecuador Technical Chapters Meeting, ETCM 2017<br/>Vol. 2017-January, pp. 1-6&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/ETCM.2017.8247544">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85045744307&doi=10.1109%2fETCM.2017.8247544&partnerID=40&md5=e7420d06785674175d5404fc3542492b">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Torres20181" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Torres20181,
+  author = {Torres, J. and Ochoa, A. and Jimenez, A. and Garcia, S. and Pelaez, E. and Ochoa, X.},
+  title = {Characterizing discussions in the Spanish Wikipedia},
+  journal = {2017 IEEE 2nd Ecuador Technical Chapters Meeting, ETCM 2017},
+  year = {2018},
+  volume = {2017-January},
+  pages = {1-6},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85045744307&amp;doi=10.1109%2fETCM.2017.8247544&amp;partnerID=40&amp;md5=e7420d06785674175d5404fc3542492b},
+  doi = {https://doi.org/10.1109/ETCM.2017.8247544}
+}
+</pre></td>
+</tr>
+<tr id="Domínguez2017216" class="entry">
+	<td>Domínguez, F. and Ochoa, X.</td>
+	<td>Smart objects in education: An early survey to assess opportunities and challenges <p class="infolinks">[<a href="javascript:toggleInfo('Domínguez2017216','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017, pp. 216-220&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/ICEDEG.2017.7962537">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026841064&doi=10.1109%2fICEDEG.2017.7962537&partnerID=40&md5=110150bec792094799086914ca1b5511">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Domínguez2017216" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Domínguez2017216,
+  author = {Domínguez, F. and Ochoa, X.},
+  title = {Smart objects in education: An early survey to assess opportunities and challenges},
+  journal = {2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017},
+  year = {2017},
+  pages = {216-220},
+  note = {cited By 1},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026841064&amp;doi=10.1109%2fICEDEG.2017.7962537&amp;partnerID=40&amp;md5=110150bec792094799086914ca1b5511},
+  doi = {https://doi.org/10.1109/ICEDEG.2017.7962537}
+}
+</pre></td>
+</tr>
+<tr id="DosSantos20171" class="entry">
+	<td>Dos Santos, H., Cechinel, C., Nunes, J. and Ochoa, X.</td>
+	<td>An initial review of learning analytics in Latin america <p class="infolinks">[<a href="javascript:toggleInfo('DosSantos20171','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>12th Latin American Conference on Learning Objects and Technologies, LACLO 2017<br/>Vol. 2017-January, pp. 1-9&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/LACLO.2017.8120913">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85043463633&doi=10.1109%2fLACLO.2017.8120913&partnerID=40&md5=79854e4bed71cf8e52d64720c7a0e225">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_DosSantos20171" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{DosSantos20171,
+  author = {Dos Santos, H.L. and Cechinel, C. and Nunes, J.B.C. and Ochoa, X.},
+  title = {An initial review of learning analytics in Latin america},
+  journal = {12th Latin American Conference on Learning Objects and Technologies, LACLO 2017},
+  year = {2017},
+  volume = {2017-January},
+  pages = {1-9},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85043463633&amp;doi=10.1109%2fLACLO.2017.8120913&amp;partnerID=40&amp;md5=79854e4bed71cf8e52d64720c7a0e225},
+  doi = {https://doi.org/10.1109/LACLO.2017.8120913}
+}
+</pre></td>
+</tr>
+<tr id="Fiallos20171" class="entry">
+	<td>Fiallos, A. and Ochoa, X.</td>
+	<td>Discrete event simulation for student flow in academic study periods <p class="infolinks">[<a href="javascript:toggleInfo('Fiallos20171','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>12th Latin American Conference on Learning Objects and Technologies, LACLO 2017<br/>Vol. 2017-January, pp. 1-7&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/LACLO.2017.8120908">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85043479926&doi=10.1109%2fLACLO.2017.8120908&partnerID=40&md5=28da3753fcc44fc4ea4f282d1f44d655">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Fiallos20171" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Fiallos20171,
+  author = {Fiallos, A. and Ochoa, X.},
+  title = {Discrete event simulation for student flow in academic study periods},
+  journal = {12th Latin American Conference on Learning Objects and Technologies, LACLO 2017},
+  year = {2017},
+  volume = {2017-January},
+  pages = {1-7},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85043479926&amp;doi=10.1109%2fLACLO.2017.8120908&amp;partnerID=40&amp;md5=28da3753fcc44fc4ea4f282d1f44d655},
+  doi = {https://doi.org/10.1109/LACLO.2017.8120908}
+}
+</pre></td>
+</tr>
+<tr id="Fiallos2017118" class="entry">
+	<td>Fiallos, A., Jimenes, K., Vaca, C. and Ochoa, X.</td>
+	<td>Scientific communities detection and analysis in the bibliographic database: SCOPUS <p class="infolinks">[<a href="javascript:toggleInfo('Fiallos2017118','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017, pp. 118-124&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/ICEDEG.2017.7962521">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026808191&doi=10.1109%2fICEDEG.2017.7962521&partnerID=40&md5=96e5a2a69b611aa5735eceb9894fa658">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Fiallos2017118" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Fiallos2017118,
+  author = {Fiallos, A. and Jimenes, K. and Vaca, C. and Ochoa, X.},
+  title = {Scientific communities detection and analysis in the bibliographic database: SCOPUS},
+  journal = {2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017},
+  year = {2017},
+  pages = {118-124},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026808191&amp;doi=10.1109%2fICEDEG.2017.7962521&amp;partnerID=40&amp;md5=96e5a2a69b611aa5735eceb9894fa658},
+  doi = {https://doi.org/10.1109/ICEDEG.2017.7962521}
+}
+</pre></td>
+</tr>
+<tr id="Molenaar2017iii" class="entry">
+	<td>Molenaar, I., Ochoa, X. and Dawson, S.</td>
+	<td>LAK 2017 program chairs' welcome <p class="infolinks">[<a href="javascript:toggleInfo('Molenaar2017iii','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>ACM International Conference Proceeding Series, pp. iii&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85019512528&partnerID=40&md5=6db5ae1ff11efd3fd4567d4df18b2862">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Molenaar2017iii" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Molenaar2017iii,
+  author = {Molenaar, I. and Ochoa, X. and Dawson, S.},
+  title = {LAK 2017 program chairs' welcome},
+  journal = {ACM International Conference Proceeding Series},
+  year = {2017},
+  pages = {iii},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85019512528&amp;partnerID=40&amp;md5=6db5ae1ff11efd3fd4567d4df18b2862}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2017" class="entry">
+	<td>Ochoa, X. and Ternier, S.</td>
+	<td>Technology Enhanced Learning <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2017','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>, pp. 145-156&nbsp;</td>
+	<td>inbook</td>
+	<td><a href="https://link.springer.com/chapter/10.1007/978-3-319-02600-8_14">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2017" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{Ochoa2017,
+  author = {Ochoa, Xavier and Ternier, Stefaan},
+  title = {Technology Enhanced Learning},
+  publisher = {Springer},
+  year = {2017},
+  pages = {145-156},
+  note = {978-3-319-02600-8},
+  url = {https://link.springer.com/chapter/10.1007/978-3-319-02600-8_14}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2017110" class="entry">
+	<td>Ochoa, X. and Peláez, E.</td>
+	<td>Affordable and secure electronic voting for university elections: The SAVE case study <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2017110','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017, pp. 110-117&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/ICEDEG.2017.7962520">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026829649&doi=10.1109%2fICEDEG.2017.7962520&partnerID=40&md5=e1081f728a957bf7692fbf8b19f37a99">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2017110" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2017110,
+  author = {Ochoa, X. and Peláez, E.},
+  title = {Affordable and secure electronic voting for university elections: The SAVE case study},
+  journal = {2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017},
+  year = {2017},
+  pages = {110-117},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026829649&amp;doi=10.1109%2fICEDEG.2017.7962520&amp;partnerID=40&amp;md5=e1081f728a957bf7692fbf8b19f37a99},
+  doi = {https://doi.org/10.1109/ICEDEG.2017.7962520}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2017a" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Handbook of Learning Analytics <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2017a','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>, pp. 129-141&nbsp;</td>
+	<td>inbook</td>
+	<td><a href="https://doi.org/10.18608/hla17">DOI</a> <a href="https://solaresearch.org/hla-17/hla17-chapter11/">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2017a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{Ochoa2017a,
+  author = {Ochoa, Xavier},
+  title = {Handbook of Learning Analytics},
+  publisher = {Society for Learning Analytics Research (SoLAR)},
+  year = {2017},
+  pages = {129-141},
+  note = {978-0-9952408-0-3},
+  url = {https://solaresearch.org/hla-17/hla17-chapter11/},
+  doi = {https://doi.org/10.18608/hla17}
+}
+</pre></td>
+</tr>
+<tr id="Prieto20171" class="entry">
+	<td>Prieto, L., Martínez-Maldonado, R., Spikol, D., Hernández-Leo, D., Rodríguez-Triana, M. and Ochoa, X.</td>
+	<td>Editorial: Joint Proceedings of the Sixth Multimodal Learning Analytics (MMLA) Workshop and the Second Cross-LAK Workshop <p class="infolinks">[<a href="javascript:toggleInfo('Prieto20171','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>CEUR Workshop Proceedings<br/>Vol. 1828, pp. 1-3&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85019839776&partnerID=40&md5=aeae542d0488c11e7476c7dba43308be">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Prieto20171" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Prieto20171,
+  author = {Prieto, L.P. and Martínez-Maldonado, R. and Spikol, D. and Hernández-Leo, D. and Rodríguez-Triana, M.J. and Ochoa, X.},
+  title = {Editorial: Joint Proceedings of the Sixth Multimodal Learning Analytics (MMLA) Workshop and the Second Cross-LAK Workshop},
+  journal = {CEUR Workshop Proceedings},
+  year = {2017},
+  volume = {1828},
+  pages = {1-3},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85019839776&amp;partnerID=40&amp;md5=aeae542d0488c11e7476c7dba43308be}
+}
+</pre></td>
+</tr>
+<tr id="Spikol:2017:CFM:3027385.3029437" class="entry">
+	<td>Spikol, D., Prieto, L.P., Rodr\iguez-Triana, M.J., Worsley, M., Ochoa, X., Cukurova, M., Vogel, B., Ruffaldi, E. and Ringtved, U.L.</td>
+	<td>Current and Future Multimodal Learning Analytics Data Challenges <p class="infolinks">[<a href="javascript:toggleInfo('Spikol:2017:CFM:3027385.3029437','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>Proceedings of the Seventh International Learning Analytics &amp; Knowledge Conference, pp. 518-519&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/3027385.3029437">DOI</a> <a href="http://doi.acm.org/10.1145/3027385.3029437">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Spikol:2017:CFM:3027385.3029437" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Spikol:2017:CFM:3027385.3029437,
+  author = {Spikol, Daniel and Prieto, Luis P. and Rodr\iguez-Triana, M. J. and Worsley, Marcelo and Ochoa, Xavier and Cukurova, Mutlu and Vogel, Bahtijar and Ruffaldi, Emanuele and Ringtved, Ulla Lunde},
+  title = {Current and Future Multimodal Learning Analytics Data Challenges},
+  booktitle = {Proceedings of the Seventh International Learning Analytics &amp; Knowledge Conference},
+  publisher = {ACM},
+  year = {2017},
+  pages = {518--519},
+  url = {http://doi.acm.org/10.1145/3027385.3029437},
+  doi = {https://doi.org/10.1145/3027385.3029437}
+}
+</pre></td>
+</tr>
+<tr id="Torres201763" class="entry">
+	<td>Torres, J., Jimenez, A., García, S., Peláez, E. and Ochoa, X.</td>
+	<td>Measuring contribution in collaborative writing: An adaptive NMF topic modelling approach <p class="infolinks">[<a href="javascript:toggleInfo('Torres201763','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017, pp. 63-70&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/ICEDEG.2017.7962514">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026836526&doi=10.1109%2fICEDEG.2017.7962514&partnerID=40&md5=e43c1e05243a0f1c601fad8f8d20ed05">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Torres201763" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Torres201763,
+  author = {Torres, J. and Jimenez, A. and García, S. and Peláez, E. and Ochoa, X.},
+  title = {Measuring contribution in collaborative writing: An adaptive NMF topic modelling approach},
+  journal = {2017 4th International Conference on eDemocracy and eGovernment, ICEDEG 2017},
+  year = {2017},
+  pages = {63-70},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-85026836526&amp;doi=10.1109%2fICEDEG.2017.7962514&amp;partnerID=40&amp;md5=e43c1e05243a0f1c601fad8f8d20ed05},
+  doi = {https://doi.org/10.1109/ICEDEG.2017.7962514}
+}
+</pre></td>
+</tr>
+<tr id="7452577" class="entry">
+	<td>Casali, A., Cechinel, C. and Ochoa, X.</td>
+	<td>Special Issue on Strategies to Improve the Usability of Learning Object Repositories <p class="infolinks">[<a href="javascript:toggleInfo('7452577','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>IEEE Revista Iberoamericana de Tecnologias del Aprendizaje<br/>Vol. 11(2), pp. 71-72&nbsp;</td>
+	<td>article</td>
+	<td><a href="https://doi.org/10.1109/RITA.2016.2553999">DOI</a> <a href="http://ieeexplore.ieee.org/document/7452577/">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_7452577" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{7452577,
+  author = {A. Casali and C. Cechinel and X. Ochoa},
+  title = {Special Issue on Strategies to Improve the Usability of Learning Object Repositories},
+  journal = {IEEE Revista Iberoamericana de Tecnologias del Aprendizaje},
+  year = {2016},
+  volume = {11},
+  number = {2},
+  pages = {71-72},
+  url = {http://ieeexplore.ieee.org/document/7452577/},
+  doi = {https://doi.org/10.1109/RITA.2016.2553999}
+}
+</pre></td>
+</tr>
+<tr id="7751800" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Adaptive multilevel clustering model for the prediction of academic risk <p class="infolinks">[<a href="javascript:toggleInfo('7751800','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>2016 XI Latin American Conference on Learning Objects and Technology (LACLO), pp. 1-8&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1109/LACLO.2016.7751800">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_7751800" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{7751800,
+  author = {X. Ochoa},
+  title = {Adaptive multilevel clustering model for the prediction of academic risk},
+  booktitle = {2016 XI Latin American Conference on Learning Objects and Technology (LACLO)},
+  year = {2016},
+  pages = {1-8},
+  doi = {https://doi.org/10.1109/LACLO.2016.7751800}
+}
+</pre></td>
+</tr>
+<tr id="Brusilovsky20161" class="entry">
+	<td>Brusilovsky, P., Sharples, M., Alves, G., Barnes, T., Chen, S., Chu, C., Drachsler, H., Isotani, S., Lindsay, E., Ochoa, X., Pechenizkiy, M., Rodrigo, M., Romero, C., Sosnovsky, S., Ternier, S. and Verbert, K.</td>
+	<td>Editorial: A Message from the Editorial Team and an Introduction to the January-March 2016 Issue <p class="infolinks">[<a href="javascript:toggleInfo('Brusilovsky20161','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>IEEE Transactions on Learning Technologies<br/>Vol. 9(1), pp. 1-4&nbsp;</td>
+	<td>article</td>
+	<td><a href="https://doi.org/10.1109/TLT.2016.2537399">DOI</a> <a href="https://www.scopus.com/inward/record.uri?eid=2-s2.0-84964344332&partnerID=40&md5=5b0c91cfe2685cd3396071edcb782eda">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Brusilovsky20161" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Brusilovsky20161,
+  author = {Brusilovsky, P. and Sharples, M. and Alves, G.R. and Barnes, T. and Chen, S.Y. and Chu, C.H.C. and Drachsler, H. and Isotani, S. and Lindsay, E. and Ochoa, X. and Pechenizkiy, M. and Rodrigo, M.M.T. and Romero, C. and Sosnovsky, S. and Ternier, S. and Verbert, K.},
+  title = {Editorial: A Message from the Editorial Team and an Introduction to the January-March 2016 Issue},
+  journal = {IEEE Transactions on Learning Technologies},
+  year = {2016},
+  volume = {9},
+  number = {1},
+  pages = {1-4},
+  note = {cited By 0},
+  url = {https://www.scopus.com/inward/record.uri?eid=2-s2.0-84964344332&amp;partnerID=40&amp;md5=5b0c91cfe2685cd3396071edcb782eda},
+  doi = {https://doi.org/10.1109/TLT.2016.2537399}
+}
+</pre></td>
+</tr>
+<tr id="greer2016learning" class="entry">
+	<td>Greer, J., Molinaro, M., Ochoa, X. and McKay, T.</td>
+	<td>Learning analytics for curriculum and program quality improvement (PCLA 2016) <p class="infolinks">[<a href="javascript:toggleInfo('greer2016learning','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>Proceedings of the Sixth International Conference on Learning Analytics &amp; Knowledge, pp. 494-495&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_greer2016learning" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{greer2016learning,
+  author = {Greer, Jim and Molinaro, Marco and Ochoa, Xavier and McKay, Timothy},
+  title = {Learning analytics for curriculum and program quality improvement (PCLA 2016)},
+  booktitle = {Proceedings of the Sixth International Conference on Learning Analytics &amp; Knowledge},
+  year = {2016},
+  pages = {494--495}
+}
+</pre></td>
+</tr>
+<tr id="mci/seipp2016" class="entry">
+	<td>Seipp, K., Ochoa, X., Gutiérrez, F. and Verbert, K.</td>
+	<td>A Research Agenda for Managing Uncertainty in Visual Analytics <p class="infolinks">[<a href="javascript:toggleInfo('mci/seipp2016','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>Mensch und Computer 2016 – Workshopband&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://dl.mensch-und-computer.de/handle/123456789/5125">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_mci/seipp2016" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{mci/seipp2016,
+  author = {Seipp, Karsten AND Ochoa, Xavier AND Gutiérrez, Francisco AND Verbert, Katrien},
+  title = {A Research Agenda for Managing Uncertainty in Visual Analytics},
+  booktitle = {Mensch und Computer 2016 – Workshopband},
+  publisher = {Gesellschaft für Informatik e.V.},
+  year = {2016},
+  url = {http://dl.mensch-und-computer.de/handle/123456789/5125}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa:PCLA2016" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Simple Metrics for Curriculum Analytics <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa:PCLA2016','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td><br/>Vol. 1590Proceedings of the 1st Learning Analytics for Curriculum and Program Quality Improvement Workshop (PCLA), pp. 20-26&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ceur-ws.org/Vol-1590/#paper-04">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa:PCLA2016" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa:PCLA2016,
+  author = {Xavier Ochoa},
+  title = {Simple Metrics for Curriculum Analytics},
+  booktitle = {Proceedings of the 1st Learning Analytics for Curriculum and Program Quality Improvement Workshop (PCLA)},
+  year = {2016},
+  volume = {1590},
+  pages = {20--26},
+  url = {http://ceur-ws.org/Vol-1590/#paper-04}
+}
+</pre></td>
+</tr>
+<tr id="ochoa2016multimodal" class="entry">
+	<td>Ochoa, X., Worsley, M., Weibel, N. and Oviatt, S.</td>
+	<td>Multimodal learning analytics data challenges <p class="infolinks">[<a href="javascript:toggleInfo('ochoa2016multimodal','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>Proceedings of the Sixth International Conference on Learning Analytics &amp; Knowledge, pp. 498-499&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_ochoa2016multimodal" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa2016multimodal,
+  author = {Ochoa, Xavier and Worsley, Marcelo and Weibel, Nadir and Oviatt, Sharon},
+  title = {Multimodal learning analytics data challenges},
+  booktitle = {Proceedings of the Sixth International Conference on Learning Analytics &amp; Knowledge},
+  year = {2016},
+  pages = {498--499}
+}
+</pre></td>
+</tr>
+<tr id="ochoajla2016" class="entry">
+	<td>Ochoa, X. and Worsley, M.</td>
+	<td>Augmenting Learning Analytics with Multimodal Sensory Data <p class="infolinks">[<a href="javascript:toggleInfo('ochoajla2016','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>Journal of Learning Analytics<br/>Vol. 3(2), pp. 213-219&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://learning-analytics.info/journals/index.php/JLA/article/view/5081/5595">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_ochoajla2016" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{ochoajla2016,
+  author = {Xavier Ochoa and Marcelo Worsley},
+  title = {Augmenting Learning Analytics with Multimodal Sensory Data},
+  journal = {Journal of Learning Analytics},
+  year = {2016},
+  volume = {3},
+  number = {2},
+  pages = {213-219},
+  url = {http://learning-analytics.info/journals/index.php/JLA/article/view/5081/5595}
+}
+</pre></td>
+</tr>
+<tr id="sosnovsky2016keynotes" class="entry">
+	<td>Sosnovsky, S., Santos, O.C. and Ochoa, X.</td>
+	<td>Keynotes: Scaling up adaptive educational systems <p class="infolinks">[<a href="javascript:toggleInfo('sosnovsky2016keynotes','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>Learning Objects and Technology (LACLO), Latin American Conference on, pp. xiv-xvi&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_sosnovsky2016keynotes" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{sosnovsky2016keynotes,
+  author = {Sosnovsky, Sergey and Santos, Olga C and Ochoa, Xavier},
+  title = {Keynotes: Scaling up adaptive educational systems},
+  booktitle = {Learning Objects and Technology (LACLO), Latin American Conference on},
+  year = {2016},
+  pages = {xiv--xvi}
+}
+</pre></td>
+</tr>
+<tr id="dominguez2015multimodal" class="entry">
+	<td>Dom\inguez, F., Chiluiza, K., Echeverria, V. and Ochoa, X.</td>
+	<td>Multimodal Selfies: Designing a Multimodal Recording Device for Students in Traditional Classrooms <p class="infolinks">[<a href="javascript:toggleInfo('dominguez2015multimodal','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>Proceedings of the 2015 ACM on International Conference on Multimodal Interaction, pp. 567-574&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_dominguez2015multimodal" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{dominguez2015multimodal,
+  author = {Dom\inguez, Federico and Chiluiza, Katherine and Echeverria, Vanessa and Ochoa, Xavier},
+  title = {Multimodal Selfies: Designing a Multimodal Recording Device for Students in Traditional Classrooms},
+  booktitle = {Proceedings of the 2015 ACM on International Conference on Multimodal Interaction},
+  year = {2015},
+  pages = {567--574}
+}
+</pre></td>
+</tr>
+<tr id="duval2015visla" class="entry">
+	<td>Duval, E., Verbert, K., Klerkx, J., Wolpers, M., Pardo, A., Govaerts, S., Gillet, D., Ochoa, X. and Parra, D.</td>
+	<td>VISLA: visual aspects of learning analytics <p class="infolinks">[<a href="javascript:toggleInfo('duval2015visla','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>Proceedings of the Fifth International Conference on Learning Analytics And Knowledge, pp. 394-395&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Duval-LAK2015.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_duval2015visla" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{duval2015visla,
+  author = {Duval, Erik and Verbert, Katrien and Klerkx, Joris and Wolpers, Martin and Pardo, Abelardo and Govaerts, Sten and Gillet, Denis and Ochoa, Xavier and Parra, Denis},
+  title = {VISLA: visual aspects of learning analytics},
+  booktitle = {Proceedings of the Fifth International Conference on Learning Analytics And Knowledge},
+  year = {2015},
+  pages = {394--395},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Duval-LAK2015.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2015" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Visualizing Uncertainty in the Prediction of Academic Risk <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2015','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>VISLA15: VISual Approaches to Learning Analytics Workshop, pp. 4-10&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://visla15.files.wordpress.com/2015/03/visla15_submission_6-3.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2015" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2015,
+  author = {Ochoa, Xavier},
+  title = {Visualizing Uncertainty in the Prediction of Academic Risk},
+  booktitle = {VISLA15: VISual Approaches to Learning Analytics Workshop},
+  year = {2015},
+  pages = {4-10},
+  url = {https://visla15.files.wordpress.com/2015/03/visla15_submission_6-3.pdf}
+}
+</pre></td>
+</tr>
+<tr id="podetti2015creacion" class="entry">
+	<td>Podetti, M., Rod&eacute;s, V., Ochoa, X., Silveira, I.F. and Casas, A.P.</td>
+	<td>Creaci&oacute;n Colaborativa de Recursos Educativos Abiertos: Experiencias de la Iniciativa LATIn <p class="infolinks">[<a href="javascript:toggleInfo('podetti2015creacion','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td><br/>Vol. 4(1)Anais dos Workshops do Congresso Brasileiro de Inform&aacute;tica na Educa&ccedil;&atilde;o, pp. 951&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_podetti2015creacion" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{podetti2015creacion,
+  author = {Podetti, Manuel and Rod&eacute;s, Virginia and Ochoa, Xavier and Silveira, Ismar Frango and Casas, Al&eacute;n P&eacute;rez},
+  title = {Creaci&oacute;n Colaborativa de Recursos Educativos Abiertos: Experiencias de la Iniciativa LATIn},
+  booktitle = {Anais dos Workshops do Congresso Brasileiro de Inform&aacute;tica na Educa&ccedil;&atilde;o},
+  year = {2015},
+  volume = {4},
+  number = {1},
+  pages = {951}
+}
+</pre></td>
+</tr>
+<tr id="Vásquez2015197" class="entry">
+	<td>Vásquez, A., Peláez, E. and Ochoa, X.</td>
+	<td>Predictor basado en prototipos difusos y clasificación no-supervisada <p class="infolinks">[<a href="javascript:toggleInfo('Vásquez2015197','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>XI Jornadas Iberoamericanas de Ingenieria de Software e Ingenieria del Conocimiento, JIISIC 2015XI Jornadas Iberoamericanas de Ingenieria de Software e Ingenieria del Conocimiento, JIISIC 2015, pp. 197-206&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://www.scopus.com/inward/record.url?eid=2-s2.0-84935102854&partnerID=40&md5=81a6968b66d8fa4a265be21f81628c3c">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Vásquez2015197" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Vásquez2015197,
+  author = {Vásquez, A. and Peláez, E. and Ochoa, X.},
+  title = {Predictor basado en prototipos difusos y clasificación no-supervisada},
+  booktitle = {XI Jornadas Iberoamericanas de Ingenieria de Software e Ingenieria del Conocimiento, JIISIC 2015},
+  journal = {XI Jornadas Iberoamericanas de Ingenieria de Software e Ingenieria del Conocimiento, JIISIC 2015},
+  year = {2015},
+  pages = {197-206},
+  note = {cited By 0},
+  url = {http://www.scopus.com/inward/record.url?eid=2-s2.0-84935102854&amp;partnerID=40&amp;md5=81a6968b66d8fa4a265be21f81628c3c}
+}
+</pre></td>
+</tr>
+<tr id="worsley20152015" class="entry">
+	<td>Worsley, M., Chiluiza, K., Grafsgaard, J.F. and Ochoa, X.</td>
+	<td>2015 Multimodal Learning and Analytics Grand Challenge <p class="infolinks">[<a href="javascript:toggleInfo('worsley20152015','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>Proceedings of the 2015 ACM on International Conference on Multimodal Interaction, pp. 525-529&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_worsley20152015" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{worsley20152015,
+  author = {Worsley, Marcelo and Chiluiza, Katherine and Grafsgaard, Joseph F and Ochoa, Xavier},
+  title = {2015 Multimodal Learning and Analytics Grand Challenge},
+  booktitle = {Proceedings of the 2015 ACM on International Conference on Multimodal Interaction},
+  year = {2015},
+  pages = {525--529}
+}
+</pre></td>
+</tr>
+<tr id="2014" class="entry">
+	<td>dos Santos, H.L., Carrillo, G., Cechinel, C. and Ochoa, X.</td>
+	<td>Towards the use of Semantic Learning Object Repositories: Evaluating Queries Performance in two Different RDF Implementations <p class="infolinks">[<a href="javascript:toggleInfo('2014','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Bulletin of the IEEE Technical Committee on Learning Technology<br/>Vol. 16(4), pp. 6-9&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://www.ieeetclt.org/issues/december2014/2-Santos.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_2014" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{2014,
+  author = {Henrique L. dos Santos and Gladys Carrillo and Cristian Cechinel and Xavier Ochoa},
+  title = {Towards the use of Semantic Learning Object Repositories: Evaluating Queries Performance in two Different RDF Implementations},
+  journal = {Bulletin of the IEEE Technical Committee on Learning Technology},
+  year = {2014},
+  volume = {16},
+  number = {4},
+  pages = {6-9},
+  url = {http://www.ieeetclt.org/issues/december2014/2-Santos.pdf}
+}
+</pre></td>
+</tr>
+<tr id="amiel2015creating" class="entry">
+	<td>Amiel, T., Soares, T. and Ochoa, X.</td>
+	<td>Creating a map for OER initiatives in Latin America <p class="infolinks">[<a href="javascript:toggleInfo('amiel2015creating','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td><br/>Vol. 5(1)Proceedings of the IX Latin American Conference in Learning Objects and Technologies (LACLO) 2014&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="Amiel-LACLO2014.pdf http://ariadne.cti.espol.edu.ec/xavier/papers/Amiel-LACLO2014.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_amiel2015creating" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{amiel2015creating,
+  author = {Amiel, Tel and Soares, Tiago and Ochoa, Xavier},
+  title = {Creating a map for OER initiatives in Latin America},
+  booktitle = {Proceedings of the IX Latin American Conference in Learning Objects and Technologies (LACLO) 2014},
+  year = {2014},
+  volume = {5},
+  number = {1},
+  url = {Amiel-LACLO2014.pdf http://ariadne.cti.espol.edu.ec/xavier/papers/Amiel-LACLO2014.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Cechinel2014" class="entry">
+	<td>Cechinel, C. and Ochoa, X.</td>
+	<td>A brief overview of quality inside learning object repositories. <p class="infolinks">[<a href="javascript:toggleInfo('Cechinel2014','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Proceedings of the XV International Conference on Human Computer Interaction, pp. 473-480&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Cechinel-Interaccion2014.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Cechinel2014" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Cechinel2014,
+  author = {Cristian Cechinel and Xavier Ochoa},
+  title = {A brief overview of quality inside learning object repositories.},
+  booktitle = {Proceedings of the XV International Conference on Human Computer Interaction},
+  year = {2014},
+  pages = {473-480},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Cechinel-Interaccion2014.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Echeverria:2014:PSE:2666633.2666641" class="entry">
+	<td>Echeverr\ia, V., Avenda no, A., Chiluiza, K., V&aacute;squez, A. and Ochoa, X.</td>
+	<td>Presentation Skills Estimation Based on Video and Kinect Data Analysis <p class="infolinks">[<a href="javascript:toggleInfo('Echeverria:2014:PSE:2666633.2666641','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Proceedings of the 2014 ACM Workshop on Multimodal Learning Analytics Workshop and Grand Challenge, pp. 53-60&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/2666633.2666641">DOI</a> <a href="http://doi.acm.org/10.1145/2666633.2666641">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Echeverria:2014:PSE:2666633.2666641" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Echeverria:2014:PSE:2666633.2666641,
+  author = {Echeverr\ia, Vanessa and Avenda&ntilde;o, Allan and Chiluiza, Katherine and V&aacute;squez, An\ibal and Ochoa, Xavier},
+  title = {Presentation Skills Estimation Based on Video and Kinect Data Analysis},
+  booktitle = {Proceedings of the 2014 ACM Workshop on Multimodal Learning Analytics Workshop and Grand Challenge},
+  publisher = {ACM},
+  year = {2014},
+  pages = {53--60},
+  url = {http://doi.acm.org/10.1145/2666633.2666641},
+  doi = {https://doi.org/10.1145/2666633.2666641}
+}
+</pre></td>
+</tr>
+<tr id="GonzaloMendez2015" class="entry">
+	<td>Mendez, G., Ochoa, X., Chiluiza, K. and de Wever, B.</td>
+	<td>Curricular Design Analysis: A Data-Driven Perspective <p class="infolinks">[<a href="javascript:toggleInfo('GonzaloMendez2015','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Journal of Learning Analytics<br/>Vol. 1(3), pp. 84-119&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://epress.lib.uts.edu.au/journals/index.php/JLA/article/view/4079">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_GonzaloMendez2015" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{GonzaloMendez2015,
+  author = {Gonzalo Mendez and Xavier Ochoa and Katherine Chiluiza and Bram de Wever},
+  title = {Curricular Design Analysis: A Data-Driven Perspective},
+  journal = {Journal of Learning Analytics},
+  year = {2014},
+  volume = {1},
+  number = {3},
+  pages = {84-119},
+  url = {http://epress.lib.uts.edu.au/journals/index.php/JLA/article/view/4079}
+}
+</pre></td>
+</tr>
+<tr id="Luzardo:2014:EPS:2666633.2666639" class="entry">
+	<td>Luzardo, G., Guam&aacute;n, B., Chiluiza, K., Castells, J. and Ochoa, X.</td>
+	<td>Estimation of Presentations Skills Based on Slides and Audio Features <p class="infolinks">[<a href="javascript:toggleInfo('Luzardo:2014:EPS:2666633.2666639','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Proceedings of the 2014 ACM Workshop on Multimodal Learning Analytics Workshop and Grand Challenge, pp. 37-44&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/2666633.2666639">DOI</a> <a href="http://doi.acm.org/10.1145/2666633.2666639">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Luzardo:2014:EPS:2666633.2666639" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Luzardo:2014:EPS:2666633.2666639,
+  author = {Luzardo, Gonzalo and Guam&aacute;n, Bruno and Chiluiza, Katherine and Castells, Jaime and Ochoa, Xavier},
+  title = {Estimation of Presentations Skills Based on Slides and Audio Features},
+  booktitle = {Proceedings of the 2014 ACM Workshop on Multimodal Learning Analytics Workshop and Grand Challenge},
+  publisher = {ACM},
+  year = {2014},
+  pages = {37--44},
+  url = {http://doi.acm.org/10.1145/2666633.2666639},
+  doi = {https://doi.org/10.1145/2666633.2666639}
+}
+</pre></td>
+</tr>
+<tr id="Mendez:2014:TDC:2567574.2567591" class="entry">
+	<td>M&eacute;ndez, G., Ochoa, X. and Chiluiza, K.</td>
+	<td>Techniques for Data-driven Curriculum Analysis <p class="infolinks">[<a href="javascript:toggleInfo('Mendez:2014:TDC:2567574.2567591','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Mendez:2014:TDC:2567574.2567591','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Proceedings of the Fourth International Conference on Learning Analytics And Knowledge, pp. 148-157&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/2567574.2567591">DOI</a> <a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Mendez-LAK2014.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Mendez:2014:TDC:2567574.2567591" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: One of the key promises of Learning Analytics research is to create<br>	tools that could help educational institutions to gain a better insight<br>	of the inner workings of their programs, in order to tune or correct<br>	them. This work presents a set of simple techniques that applied<br>	to readily available historical academic data could provide such<br>	insights. The techniques described are real course difficulty estimation,<br>	dependance estimation, curriculum coherence, dropout paths and load/performance<br>	graph. The description of these techniques is accompanied by its<br>	application to real academic data from a Computer Science program.<br>	The results of the analysis are used to obtain recommendations for<br>	curriculum re-design.</td>
+</tr>
+<tr id="bib_Mendez:2014:TDC:2567574.2567591" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Mendez:2014:TDC:2567574.2567591,
+  author = {M&eacute;ndez, Gonzalo and Ochoa, Xavier and Chiluiza, Katherine},
+  title = {Techniques for Data-driven Curriculum Analysis},
+  booktitle = {Proceedings of the Fourth International Conference on Learning Analytics And Knowledge},
+  publisher = {ACM},
+  year = {2014},
+  pages = {148--157},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Mendez-LAK2014.pdf},
+  doi = {https://doi.org/10.1145/2567574.2567591}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa:2014:MTM:2663204.2668318" class="entry">
+	<td>Ochoa, X., Worsley, M., Chiluiza, K. and Luz, S.</td>
+	<td>MLA'14: Third Multimodal Learning Analytics Workshop and Grand Challenges <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa:2014:MTM:2663204.2668318','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Proceedings of the 16th International Conference on Multimodal Interaction, pp. 531-532&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/2663204.2668318">DOI</a> <a href="http://doi.acm.org/10.1145/2663204.2668318">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa:2014:MTM:2663204.2668318" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa:2014:MTM:2663204.2668318,
+  author = {Ochoa, Xavier and Worsley, Marcelo and Chiluiza, Katherine and Luz, Saturnino},
+  title = {MLA'14: Third Multimodal Learning Analytics Workshop and Grand Challenges},
+  booktitle = {Proceedings of the 16th International Conference on Multimodal Interaction},
+  publisher = {ACM},
+  year = {2014},
+  pages = {531--532},
+  url = {http://doi.acm.org/10.1145/2663204.2668318},
+  doi = {https://doi.org/10.1145/2663204.2668318}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2014" class="entry">
+	<td>Ochoa, X., Suther, D., Verbert, K. and Duval, E.</td>
+	<td>Analysis and Reflections on the Third Learning Analytics and Knowledge Conference (LAK 2013) <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2014','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Journal of Learning Analytics<br/>Vol. 1(2), pp. 5-22&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://epress.lib.uts.edu.au/journals/index.php/JLA/article/viewFile/4080/4155">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2014" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ochoa2014,
+  author = {Xavier Ochoa and Dan Suther and Katrien Verbert and Erik Duval},
+  title = {Analysis and Reflections on the Third Learning Analytics and Knowledge Conference (LAK 2013)},
+  journal = {Journal of Learning Analytics},
+  year = {2014},
+  volume = {1},
+  number = {2},
+  pages = {5-22},
+  url = {http://epress.lib.uts.edu.au/journals/index.php/JLA/article/viewFile/4080/4155}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2014a" class="entry">
+	<td>Ochoa, X., Carrillo, G. and Cechinel., C.</td>
+	<td>Use of a Semantic Learning Repository to Facilitate the Creation of Modern e-Learning Systems. <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2014a','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Proceedings of the XV International Conference on Human Computer Interaction, pp. 535-542&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-Interaccion2014.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2014a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2014a,
+  author = {Xavier Ochoa and Gladys Carrillo and Cristian Cechinel.},
+  title = {Use of a Semantic Learning Repository to Facilitate the Creation of Modern e-Learning Systems.},
+  booktitle = {Proceedings of the XV International Conference on Human Computer Interaction},
+  year = {2014},
+  pages = {535-542},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-Interaccion2014.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Silveira2014" class="entry">
+	<td>Silveira, I.F., Mustaro, P., Rodés, V., Omar, N. and Ochoa., X.</td>
+	<td>Modelos de Diseño Instruccional con soporte a Libros Abiertos Colaborativos para Educación Abierta. <p class="infolinks">[<a href="javascript:toggleInfo('Silveira2014','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Proceedings of the XV International Conference on Human Computer Interaction, pp. 543-548&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Silveira2014" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Silveira2014,
+  author = {Ismar Frango Silveira and Pollyana Mustaro and Virginia Rodés and Nizam Omar and Xavier Ochoa.},
+  title = {Modelos de Diseño Instruccional con soporte a Libros Abiertos Colaborativos para Educación Abierta.},
+  booktitle = {Proceedings of the XV International Conference on Human Computer Interaction},
+  year = {2014},
+  pages = {543-548}
+}
+</pre></td>
+</tr>
+<tr id="Duval2013" class="entry">
+	<td>Duval, E. and Ochoa, X.</td>
+	<td>LAK 2013 chairs' welcome <p class="infolinks">[<a href="javascript:toggleInfo('Duval2013','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>ACM International Conference Proceeding Series, pp. iii&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://www.scopus.com/inward/record.url?eid=2-s2.0-84876466094&partnerID=40&md5=2842d5e898b4cf665c1ed1d1c0c3dbf4">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Duval2013" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Duval2013,
+  author = {Duval, E. and Ochoa, X.},
+  title = {LAK 2013 chairs' welcome},
+  journal = {ACM International Conference Proceeding Series},
+  year = {2013},
+  pages = {iii},
+  note = {cited By (since 1996)0},
+  url = {http://www.scopus.com/inward/record.url?eid=2-s2.0-84876466094&amp;partnerID=40&amp;md5=2842d5e898b4cf665c1ed1d1c0c3dbf4}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2013" class="entry">
+	<td>Ochoa, X., Casali, A., Deco, C., Gerling, V., Frango, I., Fager, J., Carrillo, G., Parra, G., Muñoz-Arteaga, J., Maturana, J., Araya, E. and Motz, R.</td>
+	<td>Analysis of Existing Technological Platforms for the Collaborative Production of Open Textbooks <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2013','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications, pp. 1106-1115&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMEDIA2013.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2013" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2013,
+  author = {Ochoa, Xavier and Casali, Ana and Deco, Claudia and Gerling, Valeria and Frango, Ismar and Fager, Jose and Carrillo, Gladys and Parra, Gonzalo and Muñoz-Arteaga, Jaime and Maturana, Jorge and Araya, Erick and Motz, Regina},
+  title = {Analysis of Existing Technological Platforms for the Collaborative Production of Open Textbooks},
+  booktitle = {Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications},
+  publisher = {AACE},
+  year = {2013},
+  pages = {1106-1115},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMEDIA2013.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2013a" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Handbook of Metadata, Semantics And Ontologies <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2013a','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>, pp. 63-88&nbsp;</td>
+	<td>inbook</td>
+	<td><a href="http://www.worldscientific.com/worldscibooks/10.1142/7077">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2013a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{Ochoa2013a,
+  author = {Ochoa, Xavier},
+  title = {Handbook of Metadata, Semantics And Ontologies},
+  publisher = {World Scientific},
+  year = {2013},
+  pages = {63-88},
+  url = {http://www.worldscientific.com/worldscibooks/10.1142/7077}
+}
+</pre></td>
+</tr>
+<tr id="ochoa2013expertise" class="entry">
+	<td>Ochoa, X., Chiluiza, K., M&eacute;ndez, G., Luzardo, G., Guam&aacute;n, B. and Castells, J.</td>
+	<td>Expertise estimation based on simple multimodal features <p class="infolinks">[<a href="javascript:toggleInfo('ochoa2013expertise','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>Proceedings of the 15th ACM on International conference on multimodal interaction, pp. 583-590&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ICMI2013.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_ochoa2013expertise" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa2013expertise,
+  author = {Ochoa, Xavier and Chiluiza, Katherine and M&eacute;ndez, Gonzalo and Luzardo, Gonzalo and Guam&aacute;n, Bruno and Castells, James},
+  title = {Expertise estimation based on simple multimodal features},
+  booktitle = {Proceedings of the 15th ACM on International conference on multimodal interaction},
+  year = {2013},
+  pages = {583--590},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ICMI2013.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Palavitsinis20131" class="entry">
+	<td>Palavitsinis, N., Klerkx, J. and Ochoa, X.</td>
+	<td>Editorial <p class="infolinks">[<a href="javascript:toggleInfo('Palavitsinis20131','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>International Journal of Metadata, Semantics and Ontologies<br/>Vol. 8(1), pp. 1-2&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://www.scopus.com/inward/record.url?eid=2-s2.0-84878722486&partnerID=40&md5=1bff52ca676c81dc4ac474735553336a">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Palavitsinis20131" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Palavitsinis20131,
+  author = {Palavitsinis, N. and Klerkx, J. and Ochoa, X.},
+  title = {Editorial},
+  journal = {International Journal of Metadata, Semantics and Ontologies},
+  year = {2013},
+  volume = {8},
+  number = {1},
+  pages = {1-2},
+  note = {cited By (since 1996)0},
+  url = {http://www.scopus.com/inward/record.url?eid=2-s2.0-84878722486&amp;partnerID=40&amp;md5=1bff52ca676c81dc4ac474735553336a}
+}
+</pre></td>
+</tr>
+<tr id="Pincay2013" class="entry">
+	<td>Pincay, J. and Ochoa, X.</td>
+	<td>Automatic Classification of Answers to Discussion Forums According to the Cognitive Domain of Bloom’s Taxonomy using Text Mining and a Bayesian Classifier <p class="infolinks">[<a href="javascript:toggleInfo('Pincay2013','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications, pp. 626-634&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Pincay-EDMEDIA2013.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Pincay2013" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Pincay2013,
+  author = {Pincay, Jhonny and Ochoa, Xavier},
+  title = {Automatic Classification of Answers to Discussion Forums According to the Cognitive Domain of Bloom’s Taxonomy using Text Mining and a Bayesian Classifier},
+  booktitle = {Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications},
+  publisher = {AACE},
+  year = {2013},
+  pages = {626-634},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Pincay-EDMEDIA2013.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Sicilia:2013:LOA:2460296.2460359" class="entry">
+	<td>Sicilia, M.-A., Ochoa, X., Stoitsis, G. and Klerkx, J.</td>
+	<td>Learning Object Analytics for Collections, Repositories &amp;38; Federations <p class="infolinks">[<a href="javascript:toggleInfo('Sicilia:2013:LOA:2460296.2460359','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>Proceedings of the Third International Conference on Learning Analytics and Knowledge, pp. 285-286&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/2460296.2460359">DOI</a> <a href="http://doi.acm.org/10.1145/2460296.2460359">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Sicilia:2013:LOA:2460296.2460359" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Sicilia:2013:LOA:2460296.2460359,
+  author = {Sicilia, Miguel-Angel and Ochoa, Xavier and Stoitsis, Giannis and Klerkx, Joris},
+  title = {Learning Object Analytics for Collections, Repositories &amp;38; Federations},
+  booktitle = {Proceedings of the Third International Conference on Learning Analytics and Knowledge},
+  publisher = {ACM},
+  year = {2013},
+  pages = {285--286},
+  url = {http://doi.acm.org/10.1145/2460296.2460359},
+  doi = {https://doi.org/10.1145/2460296.2460359}
+}
+</pre></td>
+</tr>
+<tr id="Silveira2013" class="entry">
+	<td>Silveira, I.F., Ochoa, X., Cuadros-Vargas, A., Casas, A.P., Casali, A., Ortega, A., Sprock, A.S., Alves, C.H., Collazos, C.A., Deco, C., Cuadros-Vargas, E., Knihs, E., Parra, G., Muñoz-Arteaga, J., dos Santos, J.G., Broisin, J., Omar, N., Motz, R., Rodés, V. and Bieliukas, Y.H.C.</td>
+	<td>A Digital Ecosystem for the Collaborative Production of Open Textbooks: The LATIn Methodology <p class="infolinks">[<a href="javascript:toggleInfo('Silveira2013','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>Journal of Information Technology Education: Research<br/>Vol. 12, pp. 225-249&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://www.jite.org/documents/Vol12/JITEv12ResearchP225-246SilveiraFT89.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Silveira2013" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Silveira2013,
+  author = {Ismar Frango Silveira and Xavier Ochoa and Alex Cuadros-Vargas and Alén Pérez Casas and Ana Casali and Andre Ortega and Antonio Silva Sprock and Carlos Henrique Alves and Cesar Alberto Collazos and Claudia Deco and Ernesto Cuadros-Vargas and Everton Knihs and Gonzalo Parra and Jaime Muñoz-Arteaga and Jéssica Gomes dos Santos and Julien Broisin and Nizam Omar and Regina Motz and Virginia Rodés and Yosly Hernández C. Bieliukas},
+  title = {A Digital Ecosystem for the Collaborative Production of Open Textbooks: The LATIn Methodology},
+  journal = {Journal of Information Technology Education: Research},
+  year = {2013},
+  volume = {12},
+  pages = {225-249},
+  url = {http://www.jite.org/documents/Vol12/JITEv12ResearchP225-246SilveiraFT89.pdf}
+}
+</pre></td>
+</tr>
+<tr id="" class="entry">
+	<td>Ochoa, X. and Carrillo, G.</td>
+	<td>Recomendación de Objetos de Aprendizaje basado en el Perfil del Usuario y la Información de Atención Contextualizada <p class="infolinks">[<a href="javascript:toggleInfo('','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>Memorias de la 7ma. Conferencia Latinoamericana de Tecnologías y Objetos de Aprendizaje (LACLO 2013)&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{,
+  author = {Xavier Ochoa and Gladys Carrillo},
+  title = {Recomendación de Objetos de Aprendizaje basado en el Perfil del Usuario y la Información de Atención Contextualizada},
+  booktitle = {Memorias de la 7ma. Conferencia Latinoamericana de Tecnologías y Objetos de Aprendizaje (LACLO 2013)},
+  year = {2013}
+}
+</pre></td>
+</tr>
+<tr id="10.1109/TLT.2012.11" class="entry">
+	<td>Verbert, K., Manouselis, N., Ochoa, X., Wolpers, M., Drachsler, H., Bosnic, I. and Duval, E.</td>
+	<td>Context-Aware Recommender Systems for Learning: A Survey and Future Challenges <p class="infolinks">[<a href="javascript:toggleInfo('10.1109/TLT.2012.11','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('10.1109/TLT.2012.11','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>IEEE Transactions on Learning Technologies<br/>Vol. 99(PrePrints), pp. 318 - 335&nbsp;</td>
+	<td>article</td>
+	<td><a href="https://doi.org/10.1109/TLT.2012.11">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_10.1109/TLT.2012.11" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Recommender systems have been researched extensively by the Technology<br>	Enhanced Learning (TEL) community in the last decade. By identifying<br>	suitable resources from a potentially overwhelming variety of choices,<br>	such systems offer a promising approach to facilitate both learning<br>	and teaching tasks. As learning is taking place in extremely diverse<br>	and rich environments, the incorporation of contextual information<br>	about the user in the recommendation process has attracted major<br>	interest. Such contextualization is researched as a paradigm for<br>	building intelligent systems that can better predict and anticipate<br>	the needs of users, and act more efficiently in response to their<br>	behavior. In this paper, we try to assess the degree to which current<br>	work in TEL recommender systems has achieved this, as well as outline<br>	areas in which further work is needed. First, we present a context<br>	framework that identifies relevant context dimensions for TEL applications.<br>	Then, we present an analysis of existing TEL recommender systems<br>	along these dimensions. Finally, based on our survey results, we<br>	outline topics on which further research is needed.</td>
+</tr>
+<tr id="bib_10.1109/TLT.2012.11" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{10.1109/TLT.2012.11,
+  author = {Katrien Verbert and Nikos Manouselis and Xavier Ochoa and Martin Wolpers and Hendrik Drachsler and Ivana Bosnic and Erik Duval},
+  title = {Context-Aware Recommender Systems for Learning: A Survey and Future Challenges},
+  journal = {IEEE Transactions on Learning Technologies},
+  publisher = {IEEE Computer Society},
+  year = {2012},
+  volume = {99},
+  number = {PrePrints},
+  pages = {318 - 335},
+  doi = {https://doi.org/10.1109/TLT.2012.11}
+}
+</pre></td>
+</tr>
+<tr id="casali2012collaborative" class="entry">
+	<td>Casali, A., Silva Sprock, A., Alves, C., Deco, C., Frango Silveira, I., Mu&ntilde;oz-Arteaga, J., Gomes dos Santos, J., Broisin, J., Morales, R., C Hern&aacute;ndez Bieliuskas, Y. and others</td>
+	<td>Collaborative Methodologies for Writing Open Educational Textbooks: a State-of art Review <p class="infolinks">[<a href="javascript:toggleInfo('casali2012collaborative','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td><br/>Vol. 1(1)Anais dos Workshops do Congresso Brasileiro de Inform&aacute;tica na Educa&ccedil;&atilde;o&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ceie-sbc.tempsite.ws/pub/index.php/wcbie/article/view/1896/1659">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_casali2012collaborative" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{casali2012collaborative,
+  author = {Casali, A. and Silva Sprock, A. and Alves, C.H. and Deco, C. and Frango Silveira, I. and Mu&ntilde;oz-Arteaga, J. and Gomes dos Santos, J. and Broisin, J. and Morales, R. and C Hern&aacute;ndez Bieliuskas, Y. and others},
+  title = {Collaborative Methodologies for Writing Open Educational Textbooks: a State-of art Review},
+  booktitle = {Anais dos Workshops do Congresso Brasileiro de Inform&aacute;tica na Educa&ccedil;&atilde;o},
+  year = {2012},
+  volume = {1},
+  number = {1},
+  url = {http://ceie-sbc.tempsite.ws/pub/index.php/wcbie/article/view/1896/1659}
+}
+</pre></td>
+</tr>
+<tr id="Cechinel2012" class="entry">
+	<td>Cechinel, C., da Silva Camargo, S., Ochoa, X., Sicilia, M.-A. and Sanchez-Alonso, S.</td>
+	<td>Populating Learning Object Repositories with Hidden Internal Quality Information <p class="infolinks">[<a href="javascript:toggleInfo('Cechinel2012','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Cechinel2012','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>Recommender Systems in Technology Enhanced Learning. RecSysTEL-2012, pp. 11-22&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ceur-ws.org/Vol-896/paper1.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Cechinel2012" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: It is known that current Learning Object Repositories adopt<br>	<br>	strategies for quality assessment of their resources that rely on<br>	the impressions<br>	<br>	of quality given by the members of the repository community. Although<br>	this<br>	<br>	strategy can be considered effective at some extent, the number of<br>	resources<br>	<br>	inside repositories tends to increase more rapidly than the number<br>	of<br>	<br>	evaluations given by this community, thus leaving several resources<br>	of the<br>	<br>	repository without any quality assessment. The present work describes<br>	the<br>	<br>	results of an experiment for automatically generate quality information<br>	about<br>	<br>	learning resources inside repositories through the use of Artificial<br>	Neural<br>	<br>	Networks models. We were able to generate models for classifying resources<br>	<br>	between good and not-good with accuracies that vary from 50% to 80%<br>	<br>	depending on the given subset. The preliminary results found here<br>	point out the<br>	<br>	feasibility of such approach and can be used as a starting point for<br>	the pursuit<br>	<br>	of automatically generation of internal quality information about<br>	resources<br>	<br>	inside repositories.</td>
+</tr>
+<tr id="bib_Cechinel2012" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Cechinel2012,
+  author = {Cristian Cechinel and Sandro da Silva Camargo and Xavier Ochoa and Miguel-Angel Sicilia and Salvador Sanchez-Alonso},
+  title = {Populating Learning Object Repositories with Hidden Internal Quality Information},
+  booktitle = {Recommender Systems in Technology Enhanced Learning. RecSysTEL-2012},
+  year = {2012},
+  pages = {11-22},
+  url = {http://ceur-ws.org/Vol-896/paper1.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2012" class="entry">
+	<td>Ochoa, X., Ortega, A., Carrillo, G. and Villavicencio, C.</td>
+	<td>Large-Scale storage and retrieval of educational metadata using an RDF Store <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2012','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Ochoa2012','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>Workshop on Open Learning Technologies Transfer, pp. 60-68&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-IGUAL2012.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Ochoa2012" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: There is a long tradition of the use of metadata stores in the<br>	<br>	educational setting. These stores usually present a mismatch problem<br>	<br>	between the structure of the metadata, usually some form of XML, and<br>	<br>	the structure of the repository itself, for example relational<br>	<br>	databases, or document-oriented stores. This mismatch lead to reduced<br>	<br>	functionality of the metadata store. This work presents a different<br>	<br>	alternative, using RDF as the internal representation of educational<br>	<br>	repositories. The architecture and actual implementation of such a<br>	<br>	system is also discussed. The use of a semantic representation of<br>	the<br>	<br>	educational metadata opens the door for novel functionalities that<br>	<br>	could provide a more intelligent repository to the final user.</td>
+</tr>
+<tr id="bib_Ochoa2012" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2012,
+  author = {Xavier Ochoa and Andre Ortega and Gladys Carrillo and Carlos Villavicencio},
+  title = {Large-Scale storage and retrieval of educational metadata using an RDF Store},
+  booktitle = {Workshop on Open Learning Technologies Transfer},
+  year = {2012},
+  pages = {60-68},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-IGUAL2012.pdf}
+}
+</pre></td>
+</tr>
+<tr id="rodes2012percepciones" class="entry">
+	<td>Rodés, V., Pérez Casas, A., Ochoa, X. and Frango da Silveira, I.</td>
+	<td>Percepciones, actitudes y prácticas respecto a los libros de texto, digitales y en formatos abiertos por parte de estudiantes de universidades de América Latina <p class="infolinks">[<a href="javascript:toggleInfo('rodes2012percepciones','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td><br/>Vol. 1(1)Anais dos Workshops do Congresso Brasileiro de Informática na Educação&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://br-ie.org/pub/index.php/wcbie/article/view/1893/1656">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_rodes2012percepciones" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{rodes2012percepciones,
+  author = {Rodés, V. and Pérez Casas, A. and Ochoa, X. and Frango da Silveira, I.},
+  title = {Percepciones, actitudes y prácticas respecto a los libros de texto, digitales y en formatos abiertos por parte de estudiantes de universidades de América Latina},
+  booktitle = {Anais dos Workshops do Congresso Brasileiro de Informática na Educação},
+  year = {2012},
+  volume = {1},
+  number = {1},
+  url = {http://br-ie.org/pub/index.php/wcbie/article/view/1893/1656}
+}
+</pre></td>
+</tr>
+<tr id="Verbert2012" class="entry">
+	<td>Verbert, K., Ochoa, X., Pardo, A. and Duval, E.</td>
+	<td>Semi-automatic Assembly of Learning Resources <p class="infolinks">[<a href="javascript:toggleInfo('Verbert2012','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Verbert2012','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>Computers and Education<br/>Vol. 59(4), pp. 1257–1272&nbsp;</td>
+	<td>article</td>
+	<td><a href="https://doi.org/10.1016/j.compedu.2012.06.005">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Verbert2012" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Technology Enhanced Learning is a research field that has matured<br>	considerably over the last decade. Many technical solutions to support<br>	design, authoring and use of learning activities and resources have<br>	been developed. The first datasets that reflect the tracking of actual<br>	use of these tools in real-life settings are beginning to become<br>	available. In this article, we present an exploratory study that<br>	relies on these datasets to support semi-automatic assembly of learning<br>	activities and resources for specific contexts. Starting from learning<br>	designs and other online sources that describe well designed learning<br>	experiences as they were used in practice, we derive sequencing patterns<br>	that capture re-occurring patterns of activities. A semi-automatic<br>	assembly framework uses these patterns to support teachers in the<br>	design and authoring of course activities. We present a case study<br>	that integrates recommendation support for sequencing activities<br>	as well as associated resources in the LAMS learning activity environment.<br>	Results indicate that the perceived usefulness is high: both teachers<br>	with expertise in the use of learning design tools as well as teachers<br>	with no background knowledge in the area indicate that the recommendations<br>	helped them in the authoring process. In addition, they feel more<br>	confident using learning design tools when support is provided that<br>	is driven by best practice knowledge.</td>
+</tr>
+<tr id="bib_Verbert2012" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Verbert2012,
+  author = {Katrien Verbert and Xavier Ochoa and Abelardo Pardo and Erik Duval},
+  title = {Semi-automatic Assembly of Learning Resources},
+  journal = {Computers and Education},
+  year = {2012},
+  volume = {59},
+  number = {4},
+  pages = {1257–1272},
+  note = {Accepted},
+  doi = {https://doi.org/10.1016/j.compedu.2012.06.005}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa:2011:LML:2090116.2090117" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Learnometrics: metrics for learning objects <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa:2011:LML:2090116.2090117','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Ochoa:2011:LML:2090116.2090117','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>Proceedings of the 1st International Conference on Learning Analytics and Knowledge, pp. 1-8&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="https://doi.org/10.1145/2090116.2090117">DOI</a> <a href="http://doi.acm.org/10.1145/2090116.2090117">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Ochoa:2011:LML:2090116.2090117" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The field of Technology Enhanced Learning (TEL) in general, has the<br>	potential to solve one of the most important challenges of our time:<br>	enable everyone to learn anything, anytime, anywhere. However, if<br>	we look back at more than 50 years of research in TEL, it is not<br>	clear where we are in terms of reaching our goal and whether we are,<br>	indeed, moving forward. The pace at which technology and new ideas<br>	evolve have created a rapid, even exponential, rate of change. This<br>	rapid change, together with the natural difficulty to measure the<br>	impact of technology in something as complex as learning, has lead<br>	to a field with abundance of new, good ideas and scarcity of evaluation<br>	studies. This lack of evaluation has resulted into the duplication<br>	of efforts and a sense of no "ground truth" or "basic theory' of<br>	TEL. This article is an attempt to stop, look back and measure, if<br>	not the impact, at least the status of a small fraction of TEL, Learning<br>	Object Technologies, in the real world. The measured apparent inexistence<br>	of the reuse paradox, the two phase linear growth of repositories<br>	or the ineffective metadata quality assessment of humans are clear<br>	reminders that even bright theoretical discussions do not compensate<br>	the lack of experimentation and measurement. Both theoretical and<br>	empirical studies should go hand in hand in order to advance the<br>	status of the field. This article is an invitation to other researchers<br>	in the field to apply Informetric techniques to measure, understand<br>	and apply in their tools the vast amount of information generated<br>	by the usage of Technology Enhanced Learning systems.</td>
+</tr>
+<tr id="bib_Ochoa:2011:LML:2090116.2090117" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa:2011:LML:2090116.2090117,
+  author = {Ochoa, Xavier},
+  title = {Learnometrics: metrics for learning objects},
+  booktitle = {Proceedings of the 1st International Conference on Learning Analytics and Knowledge},
+  publisher = {ACM},
+  year = {2011},
+  pages = {1--8},
+  url = {http://doi.acm.org/10.1145/2090116.2090117},
+  doi = {https://doi.org/10.1145/2090116.2090117}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2011" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Modeling the Macro-Behavior of Learning Object Repositories <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2011','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Ochoa2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>Interdisciplinary Journal of E-Learning and Learning Objects<br/>Vol. 7, pp. 25-35&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://www.ijello.org/Volume7/IJELLOv7p025-035Ochoa739.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Ochoa2011" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Learning Object Repositories (LOR) are the result of the activity<br>	of hundreds or thousands of contributing individuals. It has been<br>	shown in a previous work by the author (Ochoa &amp; Duval, 2008) that<br>	LORs have an interesting macro-behavior, mostly governed by long-tailed<br>	distribu- tions. The shape of these distributions provides valuable<br>	information for the management and operation of LORs. However, the<br>	reason why these distributions appear is not known. This work proposes<br>	a simple model to explain this macro-behavior as the consequence<br>	of very simple micro- behavior of individual contributors, more specifically<br>	their number, production rate, and lifetime in the repository. This<br>	model is formally presented and successfully validated against data<br>	from existing LORs. While simple, this model seems to explain most<br>	of the large-scale measurements in function of the small-scale interactions.<br>	Finally, this work discusses the implications that this model has<br>	in the planning and maintenance of new and existing LORs.</td>
+</tr>
+<tr id="bib_Ochoa2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ochoa2011,
+  author = {Xavier Ochoa},
+  title = {Modeling the Macro-Behavior of Learning Object Repositories},
+  journal = {Interdisciplinary Journal of E-Learning and Learning Objects},
+  year = {2011},
+  volume = {7},
+  pages = {25-35},
+  url = {http://www.ijello.org/Volume7/IJELLOv7p025-035Ochoa739.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Santos2011" class="entry">
+	<td>Santos, J.L., Ochoa, X., Parra, G. and Duval, E.</td>
+	<td>La Experiencia de ARIADNE: Creando una Red de Reutilización de Objetos de Aprendizaje a través de Estándares y Especificaciones <p class="infolinks">[<a href="javascript:toggleInfo('Santos2011','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Santos2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>IEEE-RITA: Latin-American Learning Technologies Journal<br/>Vol. 6(3), pp. 112-117&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Santos-RITA.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Santos2011" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: ARIADNE is a European foundation that aims to foster “Share and Reuse”<br>	of learning resources. To support this goal, ARIADNE has created<br>	an infrastructure for managing learning objects in an open and scalable<br>	way. This paper describes the technical approach behind our open,<br>	standards based infrastructure, how content providers can connect<br>	to it, and the value they can derive from doing so. As such, the<br>	abundance that we help to unlock will act as a platform for innovation<br>	by tool developers, trainers and teachers and learners themselves.</td>
+</tr>
+<tr id="bib_Santos2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Santos2011,
+  author = {Jose Luis Santos and Xavier Ochoa and Gonzalo Parra and Erik Duval},
+  title = {La Experiencia de ARIADNE: Creando una Red de Reutilización de Objetos de Aprendizaje a través de Estándares y Especificaciones},
+  journal = {IEEE-RITA: Latin-American Learning Technologies Journal},
+  year = {2011},
+  volume = {6},
+  number = {3},
+  pages = {112-117},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Santos-RITA.pdf}
+}
+</pre></td>
+</tr>
+<tr id="XavierOchoa2011" class="entry">
+	<td>Ochoa, X., Klerkx, J., Vandeputte, B. and Duval, E.</td>
+	<td>On the use of Learning Object Metadata: the GLOBE experience <p class="infolinks">[<a href="javascript:toggleInfo('XavierOchoa2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>Proceedings of the European Conference on Technology Enhanced Learning (ECTEL) 2011&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2011.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_XavierOchoa2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{XavierOchoa2011,
+  author = {Ochoa, X and Klerkx, J. and Vandeputte, B. and Duval, E.},
+  title = {On the use of Learning Object Metadata: the GLOBE experience},
+  booktitle = {Proceedings of the European Conference on Technology Enhanced Learning (ECTEL) 2011},
+  year = {2011},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2011.pdf}
+}
+</pre></td>
+</tr>
+<tr id="" class="entry">
+	<td>Ochoa, X., Frango, I. and Silva, A.</td>
+	<td>Collaborative Open Textbooks for Latin America – the LATIn Project <p class="infolinks">[<a href="javascript:toggleInfo('','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>Information Society (i-Society), 2011 International Conference on, pp. 398 - 403&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=5978479">DOI</a> <a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-iSociety2011.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: This paper presents the Latin American Open Textbook Initiative, which<br>	aims to help to solve the problem of the high cost of textbooks for<br>	higher education in Latin America. The main goal is the creation<br>	of a supporting architecture, methodologies and policies for the<br>	dissemination of cooperative open textbooks aimed for higher education,<br>	customized specifically for the region.</td>
+</tr>
+<tr id="bib_" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{,
+  author = {Ochoa, X and Frango, I. and Silva, A.},
+  title = {Collaborative Open Textbooks for Latin America – the LATIn Project},
+  booktitle = {Information Society (i-Society), 2011 International Conference on},
+  year = {2011},
+  pages = {398 - 403},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-iSociety2011.pdf},
+  doi = {http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=5978479}
+}
+</pre></td>
+</tr>
+<tr id="" class="entry">
+	<td>Silveira, I.F., Ochoa, X., Sprock, A.S., Mustaro, P.N. and Bieluskas, Y.C.H.</td>
+	<td>Towards New Computational Architectures for Mass-Collaborative Open Educational Resources <p class="infolinks">[<a href="javascript:toggleInfo('','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>International Journal of Digital Information and Wireless Communications (IJDIWC)<br/>Vol. 1(2), pp. 526-539&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://www.sdiwc.net/noahjohn/web-admin/upload-pdf/00000131.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Open Educational Resources offer several<br>	<br>	benefits mostly in education and training.<br>	<br>	Being potentially reusable, their use can<br>	<br>	reduce time and cost of developing<br>	<br>	educational programs, so that these savings<br>	<br>	could be transferred directly to students<br>	<br>	through the production of a large range of<br>	<br>	open, freely available content, which vary<br>	<br>	from hypermedia to digital textbooks. This<br>	<br>	paper discuss this issue and presents a<br>	<br>	project and a research network that, in spite<br>	<br>	of being directed to Latin America's reality<br>	<br>	and need, search for answers that would help<br>	<br>	to solve some educational questions that go<br>	<br>	beyond countries' boundaries.</td>
+</tr>
+<tr id="bib_" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{,
+  author = {Ismar Frango Silveira and Xavier Ochoa and Antonio Silva Sprock and Pollyana Notargiacomo Mustaro and Yosly C. Hernandez Bieluskas},
+  title = {Towards New Computational Architectures for Mass-Collaborative Open Educational Resources},
+  journal = {International Journal of Digital Information and Wireless Communications (IJDIWC)},
+  year = {2011},
+  volume = {1},
+  number = {2},
+  pages = {526-539},
+  url = {http://www.sdiwc.net/noahjohn/web-admin/upload-pdf/00000131.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2010" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Connexions: a Social and Successful Anomaly among Learning Object Repositories <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2010','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Ochoa2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Journal of Emerging Technologies in Web Intelligence<br/>Vol. 2(1), pp. 11-22&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://academypublisher.com/ojs/index.php/jetwi/article/view/02011122">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Ochoa2010" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Connexions is a Learning Object Repository that has gained notoriety<br>	as a successful example of collaborative creation of learning materials.<br>	In a previous quantitative study about the characteristics of learning<br>	material repositories, Connexions presented some anomalies that prevented<br>	it to be classified together with other Learning Object Repositories.<br>	This paper, working with updated data, finds that those anomalies<br>	are not errors of the previous study, but that the anomalies have<br>	increased and are more strongly expressed. Moreover, those anomalies,<br>	namely the exponential growth in the number of contributors and content,<br>	seem to be the reason behind the success of Connexions. It is concluded<br>	in this work that Connexions strategy of “release early, release<br>	often”, together with the openness of its core community, that welcome<br>	and support newcomers and sporadic contributors, offer a reasonable<br>	explanation for the exponential growth trends found in Connection,<br>	that can be classified now as a Social Learning Object Repository.</td>
+</tr>
+<tr id="bib_Ochoa2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ochoa2010,
+  author = {Ochoa, Xavier},
+  title = {Connexions: a Social and Successful Anomaly among Learning Object Repositories},
+  journal = {Journal of Emerging Technologies in Web Intelligence},
+  year = {2010},
+  volume = {2},
+  number = {1},
+  pages = {11-22},
+  url = {http://academypublisher.com/ojs/index.php/jetwi/article/view/02011122}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2010a" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Modeling the Macro-Behavior of Learning Object Repositories <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2010a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Ochoa2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Proceedings of the Fifth Latin American Conference on Learning Objects&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-LACLO2010.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Ochoa2010a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Learning Object Repositories (LOR) are the result of the activity<br>	of hundreds or thousands of contributing individuals. It has been<br>	shown in Ochoa &amp; Duval, 2009 that LOR have an interesting macro-behavior,<br>	mostly governed by long-tailed distributions. The shape of these<br>	distributions provides valuable information for the management and<br>	operation of LORs. However, the reason why these distributions appear<br>	is not known. This work proposes a simple model to explain this macro-behavior<br>	the consequence of the very simple micro-behavior of individual contributors,<br>	more specifically their number, production rate and lifetime in the<br>	repository. This model is formally presented and successfully validated<br>	against data from existing LORs. While simple, this model seems to<br>	explain most of the large-scale measurements in function of the small-scale<br>	interactions. Finally, this work discusses the implications that<br>	this model has in the planning and maintenance of new and existing<br>	LORs.</td>
+</tr>
+<tr id="bib_Ochoa2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2010a,
+  author = {Ochoa, Xavier},
+  title = {Modeling the Macro-Behavior of Learning Object Repositories},
+  booktitle = {Proceedings of the Fifth Latin American Conference on Learning Objects},
+  year = {2010},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-LACLO2010.pdf}
+}
+</pre></td>
+</tr>
+<tr id="10.1109/MIC.2009.90" class="entry">
+	<td>Ternier, S., Verbert, K., Parra, G., Vandeputte, B., Klerkx, J., Duval, E., Ordóñez, V. and Ochoa, X.</td>
+	<td>The Ariadne Infrastructure for Managing and Storing Metadata <p class="infolinks">[<a href="javascript:toggleInfo('10.1109/MIC.2009.90','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE Internet Computing<br/>Vol. 13(4), pp. 18-25&nbsp;</td>
+	<td>article</td>
+	<td><a href="https://doi.org/10.1109/MIC.2009.90">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_10.1109/MIC.2009.90" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{10.1109/MIC.2009.90,
+  author = {Stefaan Ternier and Katrien Verbert and Gonzalo Parra and Bram Vandeputte and Joris Klerkx and Erik Duval and Vicente Ordóñez and Xavier Ochoa},
+  title = {The Ariadne Infrastructure for Managing and Storing Metadata},
+  journal = {IEEE Internet Computing},
+  publisher = {IEEE Computer Society},
+  year = {2009},
+  volume = {13},
+  number = {4},
+  pages = {18-25},
+  doi = {https://doi.org/10.1109/MIC.2009.90}
+}
+</pre></td>
+</tr>
+<tr id="Duval2009" class="entry">
+	<td>Duval, E., Verbert, K., Ochoa, X. and Hodgins, W.</td>
+	<td>The Snowﬂake Number. <p class="infolinks">[<a href="javascript:toggleInfo('Duval2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Proceedings of the WebSci'09: Society On-Line,&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://www2.computer.org/portal/web/csdl/doi/10.1109/MIC.2009.90">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Duval2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Duval2009,
+  author = {Duval, Erik and Verbert, Katrien and Ochoa, Xavier and Hodgins, Wayne},
+  title = {The Snowﬂake Number.},
+  booktitle = {Proceedings of the WebSci'09: Society On-Line,},
+  year = {2009},
+  url = {http://www2.computer.org/portal/web/csdl/doi/10.1109/MIC.2009.90}
+}
+</pre></td>
+</tr>
+<tr id="Morales2009" class="entry">
+	<td>Morales, R., Ochoa, X., Sanchez, V. and Ordonez, V.</td>
+	<td>LA FLOR - Repositorio Latinoamericano de Objetos de Aprendizaje <p class="infolinks">[<a href="javascript:toggleInfo('Morales2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Recursos Digitales para el Aprendizaje, pp. 308-317&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Morales2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Morales2009,
+  author = {Rafael Morales and Xavier Ochoa and Victor Sanchez and Vicente Ordonez},
+  title = {LA FLOR - Repositorio Latinoamericano de Objetos de Aprendizaje},
+  booktitle = {Recursos Digitales para el Aprendizaje},
+  year = {2009},
+  pages = {308-317}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2009" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Learnometrica: Métricas para Objetos de Aprendizaje <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Recursos Digitales para el Aprendizaje - CcITA 2009, pp. 34-37&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2009,
+  author = {Xavier Ochoa},
+  title = {Learnometrica: Métricas para Objetos de Aprendizaje},
+  booktitle = {Recursos Digitales para el Aprendizaje - CcITA 2009},
+  year = {2009},
+  pages = {34-37}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2009a" class="entry">
+	<td>Ochoa, X., Mendez, G. and Duval, E.</td>
+	<td>Who we are: Analysis of 10 years of the ED-Media Conference <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2009a','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications ED-Media 2009, pp. 189-200&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2009.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2009a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2009a,
+  author = {Xavier Ochoa and Gonzalo Mendez and Erik Duval},
+  title = {Who we are: Analysis of 10 years of the ED-Media Conference},
+  booktitle = {Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications ED-Media 2009},
+  year = {2009},
+  pages = {189-200},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2009.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2009b" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Quantitative Analysis of Learning Object Repositories <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2009b','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE Transactions on Learning Technologies<br/>Vol. 2(3), pp. 226-238&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-TLT2009b.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2009b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ochoa2009b,
+  author = {Ochoa, Xavier and Duval, Erik},
+  title = {Quantitative Analysis of Learning Object Repositories},
+  journal = {IEEE Transactions on Learning Technologies},
+  year = {2009},
+  volume = {2},
+  number = {3},
+  pages = {226-238},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-TLT2009b.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2009c" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Automatic Evaluation of Metadata Quality in Digital Libraries <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2009c','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>International Journal of Digital Libraries<br/>Vol. 10(2), pp. 67-91&nbsp;</td>
+	<td>article</td>
+	<td><a href="https://doi.org/10.1007/s00799-009-0054-4">DOI</a> <a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-IJDL2009.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_Ochoa2009c" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Ochoa2009c,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Automatic Evaluation of Metadata Quality in Digital Libraries},
+  journal = {International Journal of Digital Libraries},
+  year = {2009},
+  volume = {10},
+  number = {2},
+  pages = {67-91},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-IJDL2009.pdf},
+  doi = {https://doi.org/10.1007/s00799-009-0054-4}
+}
+</pre></td>
+</tr>
+<tr id="RiinaVourikari2009" class="entry">
+	<td>Vourikari, R. and Ochoa, X.</td>
+	<td>Exploratory Analysis of the Main Characteristics of Tags and Tagging of Educational Resources in a Multi-lingual Context <p class="infolinks">[<a href="javascript:toggleInfo('RiinaVourikari2009','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('RiinaVourikari2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>Journal of Digital Information<br/>Vol. 10(2), pp. 10&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://journals.tdl.org/jodi/article/viewArticle/447">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_RiinaVourikari2009" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Although social, collaborative classification through tagging has<br>	been the focus of recent research, the effect of multi-linguality<br>	is often overlooked. This work presents an exploratory study of the<br>	production and use of tags in multiple languages in a context of<br>	European Learning Resources Exchange. We describe a tagging tool<br>	used by teachers from 6 countries and study the main characteristics<br>	of tags and how users tag when multiple languages are presented.<br>	We find early indication that tags and bookmarks could be used to<br>	facilitate the discovery of educational resources across country<br>	and language borders. “Hiding all but the right tags” becomes crucial<br>	for the success of a multi-lingual collaborative tagging system.</td>
+</tr>
+<tr id="bib_RiinaVourikari2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{RiinaVourikari2009,
+  author = {Vourikari, Riina and Ochoa, Xavier},
+  title = {Exploratory Analysis of the Main Characteristics of Tags and Tagging of Educational Resources in a Multi-lingual Context},
+  journal = {Journal of Digital Information},
+  year = {2009},
+  volume = {10},
+  number = {2},
+  pages = {10},
+  url = {http://journals.tdl.org/jodi/article/viewArticle/447}
+}
+</pre></td>
+</tr>
+<tr id="10.1109/TLT.2008.1" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Relevance Ranking Metrics for Learning Objects <p class="infolinks">[<a href="javascript:toggleInfo('10.1109/TLT.2008.1','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('10.1109/TLT.2008.1','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>IEEE Transactions on Learning Technologies<br/>Vol. 1(1), pp. 34-48&nbsp;</td>
+	<td>article</td>
+	<td><a href="https://doi.org/10.1109/TLT.2008.1">DOI</a> <a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-TLT2009a.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_10.1109/TLT.2008.1" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The main objetive of this paper is to improve the current status of<br>	learning object search. First, the current situation is analyzed<br>	and a theretical solution, based on relevance ranking is pruposed.<br>	To implement this solution, the paper develops the concept of relevance<br>	in the context of learning object search. Based on this concept,<br>	it proposes a set of metrics to estimate the topical, personal and<br>	situational relevance dimensions. These metrics are calculated mainly<br>	from usage and contextual information and do not require any explicit<br>	information from users. An exploratory evaluation of the metrics<br>	shows that even the simplest ones provide statistically significant<br>	improvement in the ranking order over the most common algorithmic<br>	relevance metric. Moreover, combining the metrics through learning<br>	algorithms sorts the result list 50% better than the base-line ranking.</td>
+</tr>
+<tr id="bib_10.1109/TLT.2008.1" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{10.1109/TLT.2008.1,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Relevance Ranking Metrics for Learning Objects},
+  journal = {IEEE Transactions on Learning Technologies},
+  publisher = {IEEE Computer Society},
+  year = {2008},
+  volume = {1},
+  number = {1},
+  pages = {34-48},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-TLT2009a.pdf},
+  doi = {https://doi.org/10.1109/TLT.2008.1}
+}
+</pre></td>
+</tr>
+<tr id="bayot_online_2008" class="entry">
+	<td>Bayot, B., Sonnenholzner, S., Ochoa, X., Guerrerro, J., Vera, T., Calderon, J., de Blas, I., del Pilar Cornejo-Grunauer, M., Stern, S. and Ollevier, F.</td>
+	<td>An online operational alert system for the early detection of shrimp epidemics at the regional level based on real-time production <p class="infolinks">[<a href="javascript:toggleInfo('bayot_online_2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('bayot_online_2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Aquaculture<br/>Vol. 277(3-4), pp. 164-173&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://www.sciencedirect.com/science?_ob=ArticleURL&_udi=B6T4D-4S0PK4X-1&_user=10&_rdoc=1&_fmt=&_orig=search&_sort=d&view=c&_acct=C000050221&_version=1&_urlVersion=0&_userid=10&md5=311f1ee6c0b257f20b9b68c5d9292e02">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_bayot_online_2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Diseases are among the greatest threats affecting the sustainability<br>	of shrimp aquaculture. In Ecuador, diseases of cultured shrimp have<br>	been quickly transmitted from one region to another. Therefore, an<br>	early detection system of impending epidemics could serve as an important<br>	management tool for the aquaculture sector. We developed a system<br>	for the early detection of shrimp epidemics for the largest shrimp<br>	zone of Ecuador based on production surveillance. The system, called<br>	Epidemiological Alert System and Aquaculture Management (SAEMA),<br>	uses a geographical information system (GIS) with an imaginary grid<br>	cartography (12,860 ha per grid) dividing the study area. A production<br>	and management index is calculated with the harvest data of each<br>	pond. A standardized deviation around the historical averages and<br>	an alert level is calculated per grid and month. Normal conditions<br>	of production and therefore the absence of disease are depicted in<br>	green and yellow. While, orange and red colours express a disease<br>	warning manifested through suboptimal production levels. As a result,<br>	a map of the study area with grid divisions is displayed, with a<br>	specific alert colour for each grid where information is available.<br>	SAEMA was developed as a Web application (http://www.saema.espol.edu.ec)<br>	that enables producers to record data via a worksheet format using<br>	any web browser. Instantaneously, the applications perform a calculation<br>	of the alert index and provide feedback to the alert levels displayed<br>	in an interactive map. A feedback process was initiated in May 2006<br>	with 19 participating shrimp farms. The objective of this research<br>	is to develop a platform for an early detection of shrimp epidemics<br>	on a regional scale. The detection of an epidemic, expressed as suboptimal<br>	production in a specific region, can provide producers from other<br>	zones and government authorities to engage in time preventive and<br>	control measures in order to reduce the spread of diseases.</td>
+</tr>
+<tr id="bib_bayot_online_2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{bayot_online_2008,
+  author = {Bonny Bayot and Stanislaus Sonnenholzner and Xavier Ochoa and Johanna Guerrerro and Teresa Vera and Jorge Calderon and Ignacio de Blas and Maria del Pilar Cornejo-Grunauer and Sam Stern and Frans Ollevier},
+  title = {An online operational alert system for the early detection of shrimp epidemics at the regional level based on real-time production},
+  journal = {Aquaculture},
+  year = {2008},
+  volume = {277},
+  number = {3-4},
+  pages = {164-173},
+  url = {http://www.sciencedirect.com/science?_ob=ArticleURL&amp;_udi=B6T4D-4S0PK4X-1&amp;_user=10&amp;_rdoc=1&amp;_fmt=&amp;_orig=search&amp;_sort=d&amp;view=c&amp;_acct=C000050221&amp;_version=1&amp;_urlVersion=0&amp;_userid=10&amp;md5=311f1ee6c0b257f20b9b68c5d9292e02}
+}
+</pre></td>
+</tr>
+<tr id="Motz2008" class="entry">
+	<td>Motz, R., Viola, A., de Oliveira, J.P., de Lima, J.V., Ochoa, X., Deco, C., Casali, A., Bender, C. and Alvarez, M.A.P.</td>
+	<td>Project JARDIN: Just an Assistant for instructional DesIgN <p class="infolinks">[<a href="javascript:toggleInfo('Motz2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Proceedings of the Third Latin American Conference on Learning Objects, pp. 223-227&nbsp;</td>
+	<td>inproceedings</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Motz2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Motz2008,
+  author = {Regina Motz and Alfredo Viola and José Palazzo de Oliveira and José Valdení de Lima and Xavier Ochoa and Claudia Deco and Ana Casali and Cristina Bender and Miguel Angel Pérez Alvarez},
+  title = {Project JARDIN: Just an Assistant for instructional DesIgN},
+  booktitle = {Proceedings of the Third Latin American Conference on Learning Objects},
+  year = {2008},
+  pages = {223-227}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_measuring_2008" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Times of Convergence. Technologies Across Learning Contexts <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_measuring_2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_measuring_2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Times of Convergence. Technologies Across Learning Contexts, pp. 322-325&nbsp;</td>
+	<td>inbook</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2008.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_measuring_2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: This paper presents a quantitative analysis of the reuse of learning<br>	objects in real world settings. The data for this analysis was obtained<br>	from three sources: Connexions‚Äô modules, University courses and<br>	Presentation components. They represent the reuse of learning objects<br>	at different granularity levels. Data from other types of reusable<br>	components, such as software libraries, Wikipedia images and Web<br>	APIs, were used for comparison purposes. Finally, the paper discusses<br>	the implications of the findings in the field of Learning Object<br>	research.</td>
+</tr>
+<tr id="bib_ochoa_measuring_2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{ochoa_measuring_2008,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Times of Convergence. Technologies Across Learning Contexts},
+  journal = {Times of Convergence. Technologies Across Learning Contexts},
+  publisher = {Springer},
+  year = {2008},
+  pages = {322--325},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2008.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_quantitative_2008" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Quantitative Analysis of User-Generated Content on the Web <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_quantitative_2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_quantitative_2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Proceedings of the First International Workshop on Understanding Web Evolution (WebEvolve2008), pp. 19-26&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://journal.webscience.org/34/">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_quantitative_2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: User-generated content (UGC) is becoming the most popular and valuable<br>	information available on the WWW. However, little serious research<br>	has been conducted to measure the properties of its production process.<br>	This paper presents an in-depth quantitative analysis of 9 popular<br>	websites that are based on different UGC types. The Information Production<br>	Process is used as a framework for the analysis. The findings provide<br>	for first time strong scientific evidence for previously anecdotic<br>	knowledge: UGC production follows “long-tail” distributions and it<br>	is marked with a strong “participation inequality”. Also, the analysis<br>	arrived to unexpected findings: not all the UGC types follow the<br>	inverse power-law distribution, and large content collections could<br>	be dominated by the presence of ultraproductive users. The analysis<br>	results also have implications for the administration of UGC-based<br>	websites.</td>
+</tr>
+<tr id="bib_ochoa_quantitative_2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa_quantitative_2008,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Quantitative Analysis of User-Generated Content on the Web},
+  booktitle = {Proceedings of the First International Workshop on Understanding Web Evolution (WebEvolve2008)},
+  year = {2008},
+  pages = {19-26},
+  note = {ISBN: 978 085432885 7},
+  url = {http://journal.webscience.org/34/}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_quantitative_2008a" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Quantitative Analysis of Learning Object Repositories <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_quantitative_2008a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_quantitative_2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications ED-Media 2008, pp. 6031-6040&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2008.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_quantitative_2008a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Learning Objects Repositories are the backbone of the Learning Object<br>	Economy, however little is known <br>	<br>	about their operation and much less on how that operation should be<br>	measured. Some Learnometrics (metrics <br>	<br>	for Learning Objects) need to be researched and implemented. This<br>	paper is a first step in that direction, <br>	<br>	performing a quantitative analysis of several aspects of Learning<br>	Object Repositories and Referatories in <br>	<br>	order to answer questions on their size, growth, contributor base<br>	and popularity. The analysis is performed <br>	<br>	on data from live repositories and referatories. The result of the<br>	analysis provides confirmation to long held <br>	<br>	belief, but also point out singular characteristics not previously<br>	discussed. Some of the findings are that <br>	<br>	LORs grow linearly, contribution distribution follows a power law<br>	and popularity of objects follows a log- <br>	<br>	normal distribution. The paper finalizes giving answer to the raised<br>	questions as well as the implication that <br>	<br>	these answer have in LOR community.</td>
+</tr>
+<tr id="bib_ochoa_quantitative_2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa_quantitative_2008a,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Quantitative Analysis of Learning Object Repositories},
+  booktitle = {Proceedings of World Conference on Educational Multimedia, Hypermedia and Telecommunications ED-Media 2008},
+  year = {2008},
+  pages = {6031-6040},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2008.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2008" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Learnometrics: Metrics for Learning Objects <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Ochoa2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td><i>School</i>: Katholieke Universiteit Leuven&nbsp;</td>
+	<td>phdthesis</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/ThesisFinal2.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Ochoa2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Information technology have been changing and improving the way in<br>	which teaching and learning is conducted. One aspect where the Information<br>	Technology is having profound impact is the creation and reuse of<br>	digital learning materials or more commonly called Learning Objects.<br>	Thanks to its digital nature, these objects are easy to copy, distribute<br>	and adapt. This means that teachers and learners do not need to create<br>	all their learning material, but they can share what they already<br>	have and obtain and repurpose existing content made by their peers.<br>	This economy based in sharing leads to considerable saving in time<br>	and effort and provide learning materials of better quality to an<br>	expanded population.<br>	<br>	However useful this Learning Object Economy is, little is known about<br>	how it works. How many learning objects are published and reused?<br>	how many objects each teacher produce? what is the optimal size of<br>	the objects? are basic questions that did not have an answer. Also,<br>	the tools used to create, publish, search and reuse learning objects<br>	are not smart enough and require a considerable amount of work from<br>	the users. This dissertation study the inner workings of the Learning<br>	Object Economy and propose small calculations (metrics) that can<br>	be used to improve current tools. <br>	<br>	The main findings of this research reveal that the Learning Object<br>	Economy exist but it is still immature and that the application of<br>	simple metrics could greatly improve the way in which learning objects<br>	are shared and reused.</td>
+</tr>
+<tr id="bib_Ochoa2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@phdthesis{Ochoa2008,
+  author = {Ochoa, X},
+  title = {Learnometrics: Metrics for Learning Objects},
+  school = {Katholieke Universiteit Leuven},
+  year = {2008},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/ThesisFinal2.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ordonez_diseno_2008" class="entry">
+	<td>Ordonez, V. and Ochoa, X.</td>
+	<td>Diseno de la Arquitectura de Software para un Sistema de Recuperacion de Informacion de Audio <p class="infolinks">[<a href="javascript:toggleInfo('ordonez_diseno_2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Investigacion y Desarrollo<br/>Vol. 15, pp. 42-47&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_ordonez_diseno_2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{ordonez_diseno_2008,
+  author = {Vicente Ordonez and Xavier Ochoa},
+  title = {Diseno de la Arquitectura de Software para un Sistema de Recuperacion de Informacion de Audio},
+  journal = {Investigacion y Desarrollo},
+  year = {2008},
+  volume = {15},
+  pages = {42-47}
+}
+</pre></td>
+</tr>
+<tr id="verbert_alocom_2008" class="entry">
+	<td>Verbert, K., Ochoa, X. and Duval, E.</td>
+	<td>The ALOCOM Framework: Towards Scalable Content Reuse <p class="infolinks">[<a href="javascript:toggleInfo('verbert_alocom_2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('verbert_alocom_2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Journal of Digital Information<br/>Vol. 9(26), pp. 1-24&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://journals.tdl.org/jodi/article/view/225/199">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_verbert_alocom_2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: This paper presents a framework that enables flexible content reuse.<br>	Unlike the usual practice where document components, such as images,<br>	definitions, text fragments, tables or diagrams, are assembled manually<br>	through copy-and-paste, the framework enables on-the-fly access and<br>	reuse. Retrieval of relevant components is enabled by automatic decomposition<br>	of legacy documents and storage of individual components, enriched<br>	with metadata. Furthermore, the automatic assembly of these components<br>	in mainstream authoring tools is supported. The paper describes the<br>	framework and its current support for re-assembling PowerPoint, Wikipedia<br>	and SCORM components in authoring tools. In addition, an evaluation<br>	is presented that aims to assess the effectiveness and efficiency<br>	of such content reuse for presentations.</td>
+</tr>
+<tr id="bib_verbert_alocom_2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{verbert_alocom_2008,
+  author = {Verbert, Katrien and Ochoa, Xavier and Duval, Erik},
+  title = {The ALOCOM Framework: Towards Scalable Content Reuse},
+  journal = {Journal of Digital Information},
+  year = {2008},
+  volume = {9},
+  number = {26},
+  pages = {1-24},
+  url = {http://journals.tdl.org/jodi/article/view/225/199}
+}
+</pre></td>
+</tr>
+<tr id="Duval2007" class="entry">
+	<td>Duval, E., Ternier, S., Wolpers, M., Najjar, J., Vandeputte, B., Verbert, K., Klerkx, J., Meire, M. and Ochoa, X.</td>
+	<td>Open metadata for open educational resources in an open infrastructure <p class="infolinks">[<a href="javascript:toggleInfo('Duval2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Duval2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Proceedings of the OpenLearn2007 conference: researching open content in education, pp. 36-38&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Duval-OpenLearn2007.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Duval2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We believe that the open educational resources movement focuses too<br>	much on one <br>	<br>	of the three important aspects for openness, i.e. open content. In<br>	order to take full <br>	<br>	advantage of the open educational resources, attention should also<br>	be given to open <br>	<br>	metadata and standards, so that a truly open infrastructure for learning<br>	can be <br>	<br>	developed. We are heavily involved in research around all three these<br>	aspects, and in <br>	<br>	the actual roll-out for diverse learning communities of this infrastructure.</td>
+</tr>
+<tr id="bib_Duval2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Duval2007,
+  author = {Duval, Erik and Ternier, Stefaan and Wolpers, Martin and Najjar, Jehad and Vandeputte, Bram and Verbert, Katrien and Klerkx, Joris and Meire, Michael and Ochoa, Xavier},
+  title = {Open metadata for open educational resources in an open infrastructure},
+  booktitle = {Proceedings of the OpenLearn2007 conference: researching open content in education},
+  publisher = {Open University},
+  year = {2007},
+  pages = {36-38},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Duval-OpenLearn2007.pdf}
+}
+</pre></td>
+</tr>
+<tr id="meire_samgi:_2007" class="entry">
+	<td>Meire, M., Ochoa, X. and Duval, E.</td>
+	<td>SAmgI: Automatic Metadata Generation v2.0 <p class="infolinks">[<a href="javascript:toggleInfo('meire_samgi:_2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('meire_samgi:_2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>World Conference on Educational Multimedia, Hypermedia and Telecommunications 2007Proceedings of the World Conference on Educational Multimedia, Hypermedia and Telecommunications ED-Media 2007, pp. 1195-1204&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Meire-EDMedia2007.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_meire_samgi:_2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Manual creation of metadata is tedious, error-prone and doesn?t scale.<br>	As the amount of learning content continues to grow, it becomes less<br>	and less feasible to describe all available content manually. Moreover,<br>	the metadata humans create are not perfect. Therefore, we need a<br>	change in approach, trying to automate this process as much as possible.<br>	In this paper, we provide an overview of our work from the last three<br>	years on how to achieve this automation. We also present a software<br>	design and implementation that has been evaluated in practice and<br>	that is being deployed at large scale. We detail the architectural<br>	design goals that made us evolve from a first approach to the current<br>	one.</td>
+</tr>
+<tr id="bib_meire_samgi:_2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{meire_samgi:_2007,
+  author = {Michael Meire and Xavier Ochoa and Erik Duval},
+  title = {SAmgI: Automatic Metadata Generation v2.0},
+  booktitle = {Proceedings of the World Conference on Educational Multimedia, Hypermedia and Telecommunications ED-Media 2007},
+  journal = {World Conference on Educational Multimedia, Hypermedia and Telecommunications 2007},
+  publisher = {AACE},
+  year = {2007},
+  pages = {1195-1204},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Meire-EDMedia2007.pdf}
+}
+</pre></td>
+</tr>
+<tr id="munoz_integracion_2007" class="entry">
+	<td>Munoz, J., Ochoa, X., Calvillo, E. and Parra, G.</td>
+	<td>Integracion de REDOUAA a la Federacion Latinoamericana de Repositorios de Objetos de Aprendizaje <p class="infolinks">[<a href="javascript:toggleInfo('munoz_integracion_2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('munoz_integracion_2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Proceedings of the Second Latin American Conference on Learning Objects, pp. 91-96&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Munoz-LACLO2007.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_munoz_integracion_2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Ofrecer cursos de educacion a distancia conformados por unidades de<br>	conocimiento proveniente de una red de repositorios de objetos de<br>	aprendizaje distribuidos actualmente ya es posible. Este articulo<br>	presenta la experiencia de haber integrado el Repositorio de Objetos<br>	De aprendizaje de la Universidad Autónoma de Aguascalientes (REDOUAA)<br>	a la red de repositorios de objetos de aprendizaje latinoamericanos.<br>	El principal objetivo es mitigar así la problematica de falta de<br>	contenidos academicos portables y reutilizable aportados por las<br>	instituciones de educacion superior en particular las que pertenecen<br>	a la region de Latinoamerica.</td>
+</tr>
+<tr id="bib_munoz_integracion_2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{munoz_integracion_2007,
+  author = {Jaime Munoz and Xavier Ochoa and Edgar Calvillo and Gonzalo Parra},
+  title = {Integracion de REDOUAA a la Federacion Latinoamericana de Repositorios de Objetos de Aprendizaje},
+  booktitle = {Proceedings of the Second Latin American Conference on Learning Objects},
+  year = {2007},
+  pages = {91-96},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Munoz-LACLO2007.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_relevance_2007" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Relevance Ranking Metrics for Learning Objects <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_relevance_2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_relevance_2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Creating New Learning Experiences on a Global Scale<br/>Vol. 4753, pp. 262-276&nbsp;</td>
+	<td>inbook</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2007.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_relevance_2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Technologies that solve the scarce availability of learning objects<br>	have created the opposite problem: abundance of choice. The solution<br>	to that problem is relevance ranking. Unfortunately current techniques<br>	used to rank learning objects are not able to present the user with<br>	a meaningful ordering of the result list. This work interpret the<br>	Information Retrieval concept of Relevance in the context of learning<br>	object search and use that interpretation to propose a set of metrics<br>	to estimate the Topical, Personal and Situational relevance. These<br>	metrics are calculated mainly from usage and contextual information.<br>	An exploratory evaluation of the metrics shows that even the simplest<br>	ones provide statistically significant improvement in the ranking<br>	order over the most common algorithmic relevance metric.</td>
+</tr>
+<tr id="bib_ochoa_relevance_2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{ochoa_relevance_2007,
+  author = {Ochoa, Xavier and Duval, Erik},
+  title = {Relevance Ranking Metrics for Learning Objects},
+  journal = {Creating New Learning Experiences on a Global Scale},
+  year = {2007},
+  volume = {4753},
+  pages = {262-276},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2007.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_relevance_2007a" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Relevance Ranking of Learning Objects based on Usage and Contextual Information <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_relevance_2007a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_relevance_2007a','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Proceedings of the Second Latin American Conference on Learning ObjectsProceedings of the Second Latin American Conference on Learning Objects, pp. 149-156&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-LACLO2007.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_relevance_2007a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Traditional mechanisms used to rank learning objects are not longer<br>	viable thanks to the current abundance of resources. This work proposes<br>	the construction of an improved relevance ranking function based<br>	on contextualized attention data extracted from the interaction between<br>	the users and the objects. A multidimensional approach to relevance<br>	is followed. Beside the Algorithmic relevance, currently used in<br>	most ranking functions for learning objects, another three more subjective<br>	types of relevance are estimated: Topical, Pertinence and Situational.<br>	These four types are linearly combined into a holistic relevance<br>	ranking. This work also proposes how this combined function could<br>	be efficiently calculated and implemented as a Ranked Search service<br>	inside existing e-learning tools.</td>
+</tr>
+<tr id="bib_ochoa_relevance_2007a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa_relevance_2007a,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Relevance Ranking of Learning Objects based on Usage and Contextual Information},
+  booktitle = {Proceedings of the Second Latin American Conference on Learning Objects},
+  journal = {Proceedings of the Second Latin American Conference on Learning Objects},
+  year = {2007},
+  pages = {149-156},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-LACLO2007.pdf}
+}
+</pre></td>
+</tr>
+<tr id="vuorikari_analysis_2007" class="entry">
+	<td>Vuorikari, R., Ochoa, X. and Duval, E.</td>
+	<td>Analysis of User Behavior on Multilingual Tagging of Learning Objects <p class="infolinks">[<a href="javascript:toggleInfo('vuorikari_analysis_2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('vuorikari_analysis_2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Proceedings of the First Workshop on Social Information Retrival in Technology Enhanced Learning (SIRTEL 2007)&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://infolab-dev.aua.gr/sirtel2007/papers/Vuorikari_et_al.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_vuorikari_analysis_2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Although social, collaborative classification through tagging has<br>	<br>	been the focus of recent research, the effect of multilingual tags<br>	is often<br>	<br>	overlooked. This work presents an early exploratory study of the production<br>	<br>	and consumption of multilingual tags in a European educational K-12<br>	context.<br>	<br>	The data, produced by teachers bookmarking and tagging learning resources<br>	<br>	during three month period, was analysed. Thereafter, a focus group<br>	of teachers<br>	<br>	evaluated a sample of learning resources with metadata records containing<br>	both<br>	<br>	thesaurus terms and multilingual tags. The results of this early study<br>	suggest<br>	<br>	that some tags are found as useful as thesaurus terms and that users<br>	are divided<br>	<br>	about the benefits of multilingual tags. As some tags are useful for<br>	some users,<br>	<br>	“hiding all but the right tags” becomes crucial for the success of<br>	a multilingual<br>	<br>	collaborative tagging system.</td>
+</tr>
+<tr id="bib_vuorikari_analysis_2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{vuorikari_analysis_2007,
+  author = {Riina Vuorikari and Xavier Ochoa and Erik Duval},
+  title = {Analysis of User Behavior on Multilingual Tagging of Learning Objects},
+  booktitle = {Proceedings of the First Workshop on Social Information Retrival in Technology Enhanced Learning (SIRTEL 2007)},
+  year = {2007},
+  url = {http://infolab-dev.aua.gr/sirtel2007/papers/Vuorikari_et_al.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_context-aware_2006" class="entry">
+	<td>Ochoa, X., Ternier, S., Parra, G. and Duval, E.</td>
+	<td>A Context-Aware Service Oriented Framework for Finding, Recommending and Inserting Learning Objects <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_context-aware_2006','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_context-aware_2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Innovative Approaches for Learning and Knowledge Sharing<br/>Vol. 4227, pp. 697-702&nbsp;</td>
+	<td>inbook</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2006.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_context-aware_2006" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: In this paper, we will propose a framework for finding, recommending<br>	and inserting learning objects in a digital repository, exploiting<br>	the user context that is captured from the Learning Management System<br>	(LMS). The framework we propose builds on top of the ARIADNE service<br>	oriented architecture for learning object repositories, abstracting<br>	from the technicalities of low level metadata and resource management.<br>	As a case study, the framework has been applied in a university learning<br>	management system (SIDWeb). The intent is to exploit contextual information<br>	from the learning management system in digital repositories. Keywords:<br>	Service Oriented Architectures, Learning Management Systems, Recommender<br>	services.</td>
+</tr>
+<tr id="bib_ochoa_context-aware_2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{ochoa_context-aware_2006,
+  author = {Xavier Ochoa and Stefaan Ternier and Gonzalo Parra and Erik Duval},
+  title = {A Context-Aware Service Oriented Framework for Finding, Recommending and Inserting Learning Objects},
+  journal = {Innovative Approaches for Learning and Knowledge Sharing},
+  publisher = {Springer},
+  year = {2006},
+  volume = {4227},
+  pages = {697-702},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ECTEL2006.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_quality_2006" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Quality Metrics for Learning Object Metadata <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_quality_2006','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_quality_2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>World Conference on Educational Multimedia, Hypermedia and Telecommunications 2006, pp. 1004-1011&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2006.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_quality_2006" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The quality of the learning objects metadata records stored in a repository<br>	is important its operation and interoperability. While several studies<br>	have tried to define and measure quality for metadata, a scalable<br>	and effective way to assess this quality is not currently available.<br>	This work converts the fuzzy quality definitions found in those studies<br>	into implementable measures (metrics). Several of these metrics are<br>	proposed. They are based on the same quality parameters used for<br>	human review of metadata: completeness, accuracy, provenance, conformance<br>	to expectations, logical consistency and coherence, timeliness, and<br>	accessibility. The information requirements to calculate the proposed<br>	metrics are also detailed. Some of these metrics are implemented<br>	and tested over to two collection of Learning Object Metadata, one<br>	of mainly human generated metadata, the other generated by automated<br>	means. Early results suggest that the metrics are indeed sensible<br>	to quality features in the metadata. Finally, this work recommends<br>	further work to validate and calibrate the proposed metrics.</td>
+</tr>
+<tr id="bib_ochoa_quality_2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa_quality_2006,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Quality Metrics for Learning Object Metadata},
+  journal = {World Conference on Educational Multimedia, Hypermedia and Telecommunications 2006},
+  publisher = {AACE},
+  year = {2006},
+  pages = {1004-1011},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2006.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_towards_2006" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Towards Automatic Evaluation of Learning Object Metadata Quality <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_towards_2006','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_towards_2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Advances in Conceptual Modeling - Theory and Practice<br/>Vol. 4231, pp. 372-381&nbsp;</td>
+	<td>inbook</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ER2006.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_towards_2006" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Thanks to recent developments on automatic generation of metadata<br>	and interoperability between repositories, the production, management<br>	and consumption of learning object metadata is vastly surpassing<br>	the human capacity to review or process these metadata. However,<br>	we need to make sure that the presence of some low quality metadata<br>	does not compromise the performance of services that rely on that<br>	information. Consequently, there is a need for automatic assessment<br>	of the quality of metadata, so that tools or users can be alerted<br>	about low quality instances. In this paper, we present several quality<br>	metrics for learning object metadata. We applied these metrics to<br>	a sample of records from a real repository and compared the results<br>	with the quality assessment given to the same records by a group<br>	of human reviewers. Through correlation and regression analysis,<br>	we found that one of the metrics, the text information content, could<br>	be used as a predictor of the human evaluation. While this metric<br>	is not a definitive measurement of the ?real? quality of the metadata<br>	record, we present several ways in which it can be used. We also<br>	propose new research in other quality dimensions of the learning<br>	object metadata.</td>
+</tr>
+<tr id="bib_ochoa_towards_2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inbook{ochoa_towards_2006,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Towards Automatic Evaluation of Learning Object Metadata Quality},
+  journal = {Advances in Conceptual Modeling - Theory and Practice},
+  publisher = {Springer},
+  year = {2006},
+  volume = {4231},
+  pages = {372-381},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ER2006.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_use_2006" class="entry">
+	<td>Ochoa, X. and Duval, E.</td>
+	<td>Use of contextualized attention metadata for ranking and recommending learning objects <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_use_2006','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_use_2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>CAMA '06: Proceedings of the 1st international workshop on Contextualized attention metadata: collecting, managing and exploiting of rich usage informationCIKM 2006, pp. 9-16 &nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-CIKM2006.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_use_2006" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The tools used to search and find Learning Objects in different systems<br>	do not provide a meaningful and scalable way to rank or recommend<br>	learning material. This work propose and detail the use of Contextual<br>	Attention Metadata, gathered from the different tools used in the<br>	lifecycle of the Learning Object, to create ranking and recommending<br>	metrics to improve the user experience. Four types of metrics are<br>	detailed: Link Analysis Ranking, Similarity Recommendation, Personalized<br>	Ranking and Contextual Recommendation. While designed for Learning<br>	Objects, it is shown that these metrics could also be applied to<br>	rank and recommend other types of reusable components like software<br>	libraries.</td>
+</tr>
+<tr id="bib_ochoa_use_2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa_use_2006,
+  author = {Xavier Ochoa and Erik Duval},
+  title = {Use of contextualized attention metadata for ranking and recommending learning objects},
+  booktitle = {CIKM 2006},
+  journal = {CAMA '06: Proceedings of the 1st international workshop on Contextualized attention metadata: collecting, managing and exploiting of rich usage information},
+  publisher = {ACM Press},
+  year = {2006},
+  pages = {9-16 },
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-CIKM2006.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_learning_2005" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Learning object repositories are useful, but are they usable? <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_learning_2005','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_learning_2005','bibtex')">BibTeX</a>]</p></td>
+	<td>2005</td>
+	<td>AC 2005, Proceedings of the IADIS International ConferenceIADIS AC, pp. 138-144&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-IADIS2005.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_learning_2005" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Reusable Learning Objects (RLO) Technology seems to be the solution<br>	to have good quality e-learning in a economic viable way, nonetheless<br>	they are not widespread used by faculty around the world, limiting<br>	its usefulness. One of the reasons for the reluctance to use these<br>	technologies seems to be the design of the tools used to manipulate<br>	the RLO through all its lifecycle. This work analyzes the tools to<br>	index, search and assemble Reusable Learning Objects with a usability<br>	perspective. The effectiveness, efficiency and user-satisfaction<br>	of each group of tools are evaluated. As general results this analysis<br>	found that current implementation of tools are in an immature or,<br>	even, nonexistence stage. Beside the analysis results, some recommendations<br>	to emulate other tools in order to improve their acceptance among<br>	teachers are made.</td>
+</tr>
+<tr id="bib_ochoa_learning_2005" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{ochoa_learning_2005,
+  author = {Xavier Ochoa},
+  title = {Learning object repositories are useful, but are they usable?},
+  booktitle = {IADIS AC},
+  journal = {AC 2005, Proceedings of the IADIS International Conference},
+  publisher = {IADIS},
+  year = {2005},
+  pages = {138-144},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-IADIS2005.pdf}
+}
+</pre></td>
+</tr>
+<tr id="Ochoa2005" class="entry">
+	<td>Ochoa, X., Cardinaels, K., Meire, M. and Duval, E.</td>
+	<td>Frameworks for the Automatic Indexation of Learning Management Systems Content into Learning Object Repositories <p class="infolinks">[<a href="javascript:toggleInfo('Ochoa2005','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Ochoa2005','bibtex')">BibTeX</a>]</p></td>
+	<td>2005</td>
+	<td>World Conference on Educational Multimedia, Hypermedia and Telecommunications 2005, pp. 1407-1414&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2005.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Ochoa2005" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Learning Management Systems generally offer big repositories of learning<br>	material, but the lack of publicly available metadata to describe<br>	the learning objects makes it very difficult to share and reuse these<br>	objects. If metadata could be generated for these objects in order<br>	to index them in Learning Object Repositories (LOR), the gained amount<br>	of resources could solve the sub-critical mass problem of most existing<br>	Learning Object Repositories. This work proposes two frameworks that<br>	could facilitate the implementation of Automatic Indexers for LMS<br>	content. Prototype implementations of Automatic Indexing Systems<br>	following these frameworks for real LMSs (SIDWeb and Toledo-Blackboard)<br>	show that the amount of effort needed to construct them was small<br>	compared with the benefits that this kind of systems could have.<br>	While the metadata seems to be good enough at first sight, further<br>	research of the quality of automatically generated metadata is needed.</td>
+</tr>
+<tr id="bib_Ochoa2005" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{Ochoa2005,
+  author = {Xavier Ochoa and Kris Cardinaels and Michael Meire and Erik Duval},
+  title = {Frameworks for the Automatic Indexation of Learning Management Systems Content into Learning Object Repositories},
+  journal = {World Conference on Educational Multimedia, Hypermedia and Telecommunications 2005},
+  publisher = {AACE},
+  year = {2005},
+  pages = {1407-1414},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-EDMedia2005.pdf}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_sistema_2004" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Sistema Experto para la Interpretacion Automatizada de Reflectogramas Utilizando una Estrategia de Generar, Probar y Depurar de Doble Nivel <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_sistema_2004','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_sistema_2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>Tecnologica<br/>Vol. 17, pp. 87-100&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ESPOLCiencia2004.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_sistema_2004" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Las nuevas tecnologías para la transmisión de datos a alta velocidad<br>	sobre los cables de cobre de la red de telefónica (conocidas como<br>	xDSL) fuerzan a las compañías telefónicas a tener un conocimiento<br>	detallado de la configuración de los circuitos de cada suscriptor<br>	para poder ofrecer estos servicios. Al trabajar a altas frecuencias,<br>	este esquema de comunicación se ve gravemente por las características<br>	del medio de transmisión y sus discontinuidades tales como: longitud,<br>	grosor del cable, empates, líneas paralelas, entre otros. Para poder<br>	brindar servicios xDSL, el sector de la telecomunicación necesita<br>	un sistema de medida que tenga acceso automático a los circuitos<br>	y obtenga exactamente las características de los cables que la constituyen.<br>	En este artículo se describe el proceso del análisis, diseño e implementación<br>	de un sistema experto basado en reglas para la interpretación automática<br>	de los reflectogramas en el dominio de tiempo (TDR – Time Domain<br>	Reflectograms). Con estos reflectogramas se puede medir las características<br>	del circuito de cada suscriptor. Dos nuevas estrategias de diseño<br>	se utilizan para poner este sistema experto en funcionamiento: Unidades<br>	de conocimiento, llamadas "Vistas del Mundo", y un algoritmo Generar-Probar-Depurar<br>	de Doble Nivel, una versión modificada del GPD normal. Se corren<br>	una serie de pruebas contra un prototipo de esta implementación para<br>	medir el funcionamiento de las ideas propuestas. Los resultados muestran<br>	que aún con un nivel limitado de conocimiento, el sistema es capaz<br>	de resolver con una alta tasa de exactitud las topologías simples<br>	y tiene una calificación aceptable en casos más complejos.</td>
+</tr>
+<tr id="bib_ochoa_sistema_2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{ochoa_sistema_2004,
+  author = {Xavier Ochoa},
+  title = {Sistema Experto para la Interpretacion Automatizada de Reflectogramas Utilizando una Estrategia de Generar, Probar y Depurar de Doble Nivel},
+  journal = {Tecnologica},
+  year = {2004},
+  volume = {17},
+  pages = {87-100},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-ESPOLCiencia2004.pdf}
+}
+</pre></td>
+</tr>
+<tr id="sanchez_pantalla_2004" class="entry">
+	<td>Sanchez, J. and Ochoa, X.</td>
+	<td>Pantalla de Visualizacion en la ESPOL <p class="infolinks">[<a href="javascript:toggleInfo('sanchez_pantalla_2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>Tecnologica<br/>Vol. 17(1), pp. 72-76&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_sanchez_pantalla_2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{sanchez_pantalla_2004,
+  author = {Jorge Sanchez and Xavier Ochoa},
+  title = {Pantalla de Visualizacion en la ESPOL},
+  journal = {Tecnologica},
+  year = {2004},
+  volume = {17},
+  number = {1},
+  pages = {72-76}
+}
+</pre></td>
+</tr>
+<tr id="sonnenholzner_ecuador_2004" class="entry">
+	<td>Sonnenholzner, S., Bayot, B., Apolo, I., Vera, T., Ochoa, X., Cisneros, Z., Biesen, L.V., Cornejo, M. and Calderon, J.</td>
+	<td>Ecuador Develops GIS-ASSISTED Alert System For Shrimp Farming <p class="infolinks">[<a href="javascript:toggleInfo('sonnenholzner_ecuador_2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>Global Aquaculture Advocate<br/>Vol. 7(3)&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_sonnenholzner_ecuador_2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{sonnenholzner_ecuador_2004,
+  author = {S. Sonnenholzner and B. Bayot and I. Apolo and T. Vera and X. Ochoa and Z. Cisneros and L. Van Biesen and M.P. Cornejo and J. Calderon},
+  title = {Ecuador Develops GIS-ASSISTED Alert System For Shrimp Farming},
+  journal = {Global Aquaculture Advocate},
+  year = {2004},
+  volume = {7},
+  number = {3}
+}
+</pre></td>
+</tr>
+<tr id="vermeiren_subscriber_2003" class="entry">
+	<td>Vermeiren, T., Bostoen, T., Boets, P., Ochoa, X. and Louage, F.</td>
+	<td>Subscriber Loop Classification by means of Time Domain Reflectometry <p class="infolinks">[<a href="javascript:toggleInfo('vermeiren_subscriber_2003','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('vermeiren_subscriber_2003','bibtex')">BibTeX</a>]</p></td>
+	<td>2003</td>
+	<td><br/>Vol. 3Proceedings of IEEE International Conference on Communications, 2003. ICC '03., pp. 1998- 2002&nbsp;</td>
+	<td>inproceedings</td>
+	<td><a href="http://ieeexplore.ieee.org/Xplore/login.jsp?url=/iel5/8564/27115/01203949.pdf?arnumber=1203949">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_vermeiren_subscriber_2003" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Qualifying a subscriber loop for xDSL transmission can be done in<br>	many ways. Amongst all ways, methods that don't require an expensive<br>	truck-roll to the customer are preferred. In this paper we provide<br>	a method for an intelligent automated interpretation of reflectometric<br>	1-port measurements at the central office. First, we focus on how<br>	reflectograms can be characterised. Next, we build up intelligence<br>	in the system to deal with the uncertainty on the characteristics<br>	and to infer the topology by means of a belief network. Eventually,<br>	we combine in an artificial intelligent way, by means of a rule-based<br>	expert system all available knowledge and derive the basic loop properties<br>	i.e. the topology and the delays of the individual line sections.</td>
+</tr>
+<tr id="bib_vermeiren_subscriber_2003" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@inproceedings{vermeiren_subscriber_2003,
+  author = {Vermeiren, T. and Bostoen, T. and Boets, P. and Ochoa, X. and Louage, F.},
+  title = {Subscriber Loop Classification by means of Time Domain Reflectometry},
+  booktitle = {Proceedings of IEEE International Conference on Communications, 2003. ICC '03.},
+  year = {2003},
+  volume = {3},
+  pages = {1998- 2002},
+  url = {http://ieeexplore.ieee.org/Xplore/login.jsp?url=/iel5/8564/27115/01203949.pdf?arnumber=1203949}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_expert_2002" class="entry">
+	<td>Ochoa, X.</td>
+	<td>Expert System for Automated Time Domain Reflectometry Interpretation using a Double Level Generate-Test-Debug approach <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_expert_2002','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('ochoa_expert_2002','bibtex')">BibTeX</a>]</p></td>
+	<td>2002</td>
+	<td><i>School</i>: Vrije Universiteit Brussels (VUB)&nbsp;</td>
+	<td>mastersthesis</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="abs_ochoa_expert_2002" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Qualifying a subscriber loop for xDSL transmission can be done in<br>	many ways. Amongst all ways, methods that don't require an expensive<br>	truck-roll to the customer are preferred. In this paper we provide<br>	a method for an intelligent automated interpretation of reflectometric<br>	1-port measurements at the central office. First, we focus on how<br>	reflectograms can be characterised. Next, we build up intelligence<br>	in the system to deal with the uncertainty on the characteristics<br>	and to infer the topology by means of a belief network. Eventually,<br>	we combine in an artificial intelligent way, by means of a rule-based<br>	expert system all available knowledge and derive the basic loop properties<br>	i.e. the topology and the delays of the individual line sections.</td>
+</tr>
+<tr id="bib_ochoa_expert_2002" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@mastersthesis{ochoa_expert_2002,
+  author = {Xavier Ochoa},
+  title = {Expert System for Automated Time Domain Reflectometry Interpretation using a Double Level Generate-Test-Debug approach},
+  school = {Vrije Universiteit Brussels (VUB)},
+  year = {2002}
+}
+</pre></td>
+</tr>
+<tr id="ochoa_analisis_2000" class="entry">
+	<td>Ochoa, X. and Peláez, E.</td>
+	<td>Analisis y Diseno de una Solucion Tecnica para el Uso de Multimedia y Videoconferencia para el Desarrollo de la Educacion a Distancia en la ESPOL <p class="infolinks">[<a href="javascript:toggleInfo('ochoa_analisis_2000','bibtex')">BibTeX</a>]</p></td>
+	<td>2000</td>
+	<td>Tecnológica<br/>Vol. 14(1), pp. 21-30&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-RTE2000.pdf">URL</a>&nbsp;</td>
+</tr>
+<tr id="bib_ochoa_analisis_2000" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{ochoa_analisis_2000,
+  author = {Xavier Ochoa and Enrique Peláez},
+  title = {Analisis y Diseno de una Solucion Tecnica para el Uso de Multimedia y Videoconferencia para el Desarrollo de la Educacion a Distancia en la ESPOL},
+  journal = {Tecnológica},
+  year = {2000},
+  volume = {14},
+  number = {1},
+  pages = {21-30},
+  url = {http://ariadne.cti.espol.edu.ec/xavier/papers/Ochoa-RTE2000.pdf}
+}
+</pre></td>
+</tr>
+</tbody>
+</table>
+<footer>
+ <small>Created by <a href="http://jabref.sourceforge.net">JabRef</a> on 19/09/2018.</small>
+</footer>
+<!-- file generated by JabRef -->
+</body>
+</html>
