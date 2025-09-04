@@ -28,7 +28,7 @@
       "nodes":[
         {
           "parameters":{
-            "formTitle":"Create Multiple Cnoice Questions",
+            "formTitle":"Create Multiple Choice Questions",
             "formDescription":"This app will help you to create MCQ.",
             "formFields":{"values":[
               {"fieldLabel":"Topic","placeholder":"e.g. Fractions, French History","requiredField":true},
@@ -46,20 +46,23 @@
         {
           "parameters":{
             "modelId":{"__rl":true,"value":"models/gemini-2.5-flash","mode":"list","cachedResultName":"models/gemini-2.5-flash"},
-            "messages":{"values":[{"content":"=Please, genarate  {{ $json[\'Number of Questions\'] }} questions about {{ $json.Topic }}"}]},
+            "messages":{"values":[
+              {
+                "content":"=Please generate {{ $json[\\\"Number of Questions\\\"] }} questions about {{ $json[\\\"Topic\\\"] }}."
+              }
+            ]},
             "options":{}
           },
           "type":"@n8n/n8n-nodes-langchain.googleGemini",
           "typeVersion":1,
           "position":[208,0],
           "id":"4b7de8c0-9bb6-4812-b548-8ae85511fd04",
-          "name":"Message a model",
-          "credentials":{"googlePalmApi":{"id":"q9qSyL39jNfT4P44","name":"Google Gemini(PaLM) Api account 2"}}
+          "name":"Message a model"
         },
         {
           "parameters":{
             "operation":"completion",
-            "completionTitle":"This is the answer",
+            "completionTitle":"Generated Questions",
             "completionMessage":"={{ $json.content.parts[0].text }}",
             "options":{}
           },
@@ -67,8 +70,8 @@
           "typeVersion":1,
           "position":[560,0],
           "id":"419a7b97-3468-4d92-a670-d09afbec4d0b",
-          "name":"Form",
-          "webhookId":"46d32096-40a2-4da2-830b-1f7de0d34a05"
+            "name":"Form",
+            "webhookId":"46d32096-40a2-4da2-830b-1f7de0d34a05"
         }
       ],
       "pinData":{},
@@ -79,7 +82,7 @@
       "active":true,
       "settings":{"executionOrder":"v1"},
       "versionId":"a87712df-5888-4e8a-80fc-f803c7fefe3e",
-      "meta":{"templateCredsSetupCompleted":true,"instanceId":"c02765b3d48907a0cfe332f8906beb07472eb5d5f52b81b8b1f6893ff9c1b6dd"},
+      "meta":{"templateCredsSetupCompleted":true},
       "id":"ZML25sahIOPrdZel",
       "tags":[]
     }'>
