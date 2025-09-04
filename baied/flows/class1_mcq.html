@@ -16,130 +16,77 @@
 </head>
 
 <body>
-    <div>
-        <p><n8n-demo
-                workflow='{{
-  "name": "MCQ",
-  "nodes": [
-    {
-      "parameters": {
-        "formTitle": "Create Multiple Cnoice Questions",
-        "formDescription": "This app will help you to create MCQ.",
-        "formFields": {
-          "values": [
-            {
-              "fieldLabel": "Topic",
-              "placeholder": "e.g. Fractions, French History",
-              "requiredField": true
-            },
-            {
-              "fieldLabel": "Number of Questions",
-              "fieldType": "number",
-              "placeholder": "3"
-            }
-          ]
+
+
+<!-- Optional: container sizing -->
+<div style="max-width:900px;margin:0 auto">
+  <n8n-demo
+    clicktointeract="true"
+    frame="true"
+    workflow='{
+      "name":"MCQ",
+      "nodes":[
+        {
+          "parameters":{
+            "formTitle":"Create Multiple Cnoice Questions",
+            "formDescription":"This app will help you to create MCQ.",
+            "formFields":{"values":[
+              {"fieldLabel":"Topic","placeholder":"e.g. Fractions, French History","requiredField":true},
+              {"fieldLabel":"Number of Questions","fieldType":"number","placeholder":"3"}
+            ]},
+            "options":{}
+          },
+          "type":"n8n-nodes-base.formTrigger",
+          "typeVersion":2.2,
+          "position":[0,0],
+          "id":"fa312a83-5a5d-40e0-8117-8802fde01d7c",
+          "name":"On form submission",
+          "webhookId":"139175b8-9592-48df-bd7f-2b415eadc55f"
         },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.formTrigger",
-      "typeVersion": 2.2,
-      "position": [
-        0,
-        0
-      ],
-      "id": "fa312a83-5a5d-40e0-8117-8802fde01d7c",
-      "name": "On form submission",
-      "webhookId": "139175b8-9592-48df-bd7f-2b415eadc55f"
-    },
-    {
-      "parameters": {
-        "modelId": {
-          "__rl": true,
-          "value": "models/gemini-2.5-flash",
-          "mode": "list",
-          "cachedResultName": "models/gemini-2.5-flash"
+        {
+          "parameters":{
+            "modelId":{"__rl":true,"value":"models/gemini-2.5-flash","mode":"list","cachedResultName":"models/gemini-2.5-flash"},
+            "messages":{"values":[{"content":"=Please, genarate  {{ $json[\'Number of Questions\'] }} questions about {{ $json.Topic }}"}]},
+            "options":{}
+          },
+          "type":"@n8n/n8n-nodes-langchain.googleGemini",
+          "typeVersion":1,
+          "position":[208,0],
+          "id":"4b7de8c0-9bb6-4812-b548-8ae85511fd04",
+          "name":"Message a model",
+          "credentials":{"googlePalmApi":{"id":"q9qSyL39jNfT4P44","name":"Google Gemini(PaLM) Api account 2"}}
         },
-        "messages": {
-          "values": [
-            {
-              "content": "=Please, genarate  {{ $json['Number of Questions'] }} questions about {{ $json.Topic }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.googleGemini",
-      "typeVersion": 1,
-      "position": [
-        208,
-        0
-      ],
-      "id": "4b7de8c0-9bb6-4812-b548-8ae85511fd04",
-      "name": "Message a model",
-      "credentials": {
-        "googlePalmApi": {
-          "id": "q9qSyL39jNfT4P44",
-          "name": "Google Gemini(PaLM) Api account 2"
+        {
+          "parameters":{
+            "operation":"completion",
+            "completionTitle":"This is the answer",
+            "completionMessage":"={{ $json.content.parts[0].text }}",
+            "options":{}
+          },
+          "type":"n8n-nodes-base.form",
+          "typeVersion":1,
+          "position":[560,0],
+          "id":"419a7b97-3468-4d92-a670-d09afbec4d0b",
+          "name":"Form",
+          "webhookId":"46d32096-40a2-4da2-830b-1f7de0d34a05"
         }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "completion",
-        "completionTitle": "This is the answer",
-        "completionMessage": "={{ $json.content.parts[0].text }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.form",
-      "typeVersion": 1,
-      "position": [
-        560,
-        0
       ],
-      "id": "419a7b97-3468-4d92-a670-d09afbec4d0b",
-      "name": "Form",
-      "webhookId": "46d32096-40a2-4da2-830b-1f7de0d34a05"
-    }
-  ],
-  "pinData": {},
-  "connections": {
-    "On form submission": {
-      "main": [
-        [
-          {
-            "node": "Message a model",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Message a model": {
-      "main": [
-        [
-          {
-            "node": "Form",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "active": true,
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "versionId": "a87712df-5888-4e8a-80fc-f803c7fefe3e",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "c02765b3d48907a0cfe332f8906beb07472eb5d5f52b81b8b1f6893ff9c1b6dd"
-  },
-  "id": "ZML25sahIOPrdZel",
-  "tags": []
-}'
-                frame=true></n8n-demo></p>
-    </div>
+      "pinData":{},
+      "connections":{
+        "On form submission":{"main":[[{"node":"Message a model","type":"main","index":0}]]},
+        "Message a model":{"main":[[{"node":"Form","type":"main","index":0}]]}
+      },
+      "active":true,
+      "settings":{"executionOrder":"v1"},
+      "versionId":"a87712df-5888-4e8a-80fc-f803c7fefe3e",
+      "meta":{"templateCredsSetupCompleted":true,"instanceId":"c02765b3d48907a0cfe332f8906beb07472eb5d5f52b81b8b1f6893ff9c1b6dd"},
+      "id":"ZML25sahIOPrdZel",
+      "tags":[]
+    }'>
+  </n8n-demo>
+</div>
+
+
 </body>
 
 </html>
