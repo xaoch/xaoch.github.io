@@ -20,116 +20,174 @@
 
 <!-- Optional: container sizing -->
 <div>
-<n8n-demo
-  clicktointeract="true"
-  frame="true"
-  workflow='{
-    "name":"Class3: Career Advisor",
-    "nodes":[
-      {
-        "parameters":{
-          "public":true,
-          "options":{}
-        },
-        "type":"@n8n/n8n-nodes-langchain.chatTrigger",
-        "typeVersion":1.3,
-        "position":[0,0],
-        "id":"eb8b73e9-d9f0-4c05-a4a6-bb81905f7f93",
-        "name":"When chat message received",
-        "webhookId":"c1198ac7-2a9b-48e0-b702-ad732713e173"
+<script type="application/json" id="career-json">
+{
+  "name": "Class3: Career Advisor",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
       },
-      {
-        "parameters":{
-          "options":{
-            "systemMessage":"You are a assistant with a good memory. \\n\\nYou always start a conversation by asking the name of the user.  \\n\\nIMPORTANT: \\n- DO NOT RETRIEVE MEMORIES WITHOUT KNOWING THE NAME OF THE USER\\n- ONCE YOU KNOW THE USER NAME DO NOT ANSWER WITHOUT RETRIEVING MEMORIES\\n\\nIf the user says something about itself worth remembering you will use the tool to store memories.  \\n\\n"
-          }
-        },
-        "type":"@n8n/n8n-nodes-langchain.agent",
-        "typeVersion":2.2,
-        "position":[368,0],
-        "id":"20444f07-5dff-4e94-abe8-c31053232146",
-        "name":"AI Agent"
-      },
-      {
-        "parameters":{"options":{}},
-        "type":"@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-        "typeVersion":1,
-        "position":[240,208],
-        "id":"be40f7ab-bb5d-49e0-9805-1ed40cb8b8e0",
-        "name":"Google Gemini Chat Model",
-        "credentials":{
-          "googlePalmApi":{"id":"q9qSyL39jNfT4P44","name":"Google Gemini(PaLM) Api account 2"}
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "eb8b73e9-d9f0-4c05-a4a6-bb81905f7f93",
+      "name": "When chat message received",
+      "webhookId": "c1198ac7-2a9b-48e0-b702-ad732713e173"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a assistant with a good memory. \n\nYou always start a conversation by asking the name of the user.  \n\nIMPORTANT: \n- DO NOT RETRIEVE MEMORIES WITHOUT KNOWING THE NAME OF THE USER\n- ONCE YOU KNOW THE USER NAME DO NOT ANSWER WITHOUT RETRIEVING MEMORIES\n\nIf the user says something about itself worth remembering you will use the tool to store memories.  \n\n"
         }
       },
-      {
-        "parameters":{"contextWindowLength":20},
-        "type":"@n8n/n8n-nodes-langchain.memoryBufferWindow",
-        "typeVersion":1.3,
-        "position":[384,208],
-        "id":"668d7bfb-c2a4-485f-8a14-3c301dc8842e",
-        "name":"Simple Memory"
-      },
-      {
-        "parameters":{
-          "operation":"append",
-          "documentId":{"__rl":true,"value":"1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0","mode":"list","cachedResultName":"Career Advisor LTM","cachedResultUrl":"https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit?usp=drivesdk"},
-          "sheetName":{"__rl":true,"value":"gid=0","mode":"list","cachedResultName":"Memory","cachedResultUrl":"https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit#gid=0"},
-          "columns":{
-            "mappingMode":"defineBelow",
-            "value":{
-              "User":"={{ /*n8n-auto-generated-fromAI-override*/ $fromAI(\"User\", `The name of the user`, \"string\") }}",
-              "Memory":"={{ /*n8n-auto-generated-fromAI-override*/ $fromAI(\"Memory\", `The memory to be stored`, \"string\") }}",
-              "Date":"={{ $now }}"
-            },
-            "matchingColumns":[],
-            "schema":[
-              {"id":"User","displayName":"User","required":false,"defaultMatch":false,"display":true,"type":"string","canBeUsedToMatch":true},
-              {"id":"Memory","displayName":"Memory","required":false,"defaultMatch":false,"display":true,"type":"string","canBeUsedToMatch":true},
-              {"id":"Date","displayName":"Date","required":false,"defaultMatch":false,"display":true,"type":"string","canBeUsedToMatch":true}
-            ],
-            "attemptToConvertTypes":false,
-            "convertFieldsToString":false
-          },
-          "options":{}
-        },
-        "type":"n8n-nodes-base.googleSheetsTool",
-        "typeVersion":4.7,
-        "position":[656,208],
-        "id":"6c74f423-9abd-4063-905e-a4bf8b03fdc1",
-        "name":"Store Long Term Memory",
-        "credentials":{"googleSheetsOAuth2Api":{"id":"nUwqmFJ6dxkuSZt2","name":"Google Sheets account"}}
-      },
-      {
-        "parameters":{
-          "documentId":{"__rl":true,"value":"1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0","mode":"list","cachedResultName":"Career Advisor LTM","cachedResultUrl":"https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit?usp=drivesdk"},
-          "sheetName":{"__rl":true,"value":"gid=0","mode":"list","cachedResultName":"Memory","cachedResultUrl":"https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit#gid=0"},
-          "filtersUI":{"values":[{"lookupColumn":"User","lookupValue":"={{ /*n8n-auto-generated-fromAI-override*/ $fromAI(\"values0_Value\", `The name of the user which memories we want`, \"string\") }}"]},
-          "options":{}
-        },
-        "type":"n8n-nodes-base.googleSheetsTool",
-        "typeVersion":4.7,
-        "position":[800,160],
-        "id":"31c4153a-315a-48fa-aa0f-9051b5235aaa",
-        "name":"Retrieve Memories",
-        "credentials":{"googleSheetsOAuth2Api":{"id":"nUwqmFJ6dxkuSZt2","name":"Google Sheets account"}}
-      }
-    ],
-    "pinData":{},
-    "connections":{
-      "When chat message received":{"main":[[{"node":"AI Agent","type":"main","index":0}]]},
-      "Google Gemini Chat Model":{"ai_languageModel":[[{"node":"AI Agent","type":"ai_languageModel","index":0}]]},
-      "Simple Memory":{"ai_memory":[[{"node":"AI Agent","type":"ai_memory","index":0}]]},
-      "Store Long Term Memory":{"ai_tool":[[{"node":"AI Agent","type":"ai_tool","index":0}]]},
-      "Retrieve Memories":{"ai_tool":[[{"node":"AI Agent","type":"ai_tool","index":0}]]}
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [368, 0],
+      "id": "20444f07-5dff-4e94-abe8-c31053232146",
+      "name": "AI Agent"
     },
-    "active":false,
-    "settings":{"executionOrder":"v1"},
-    "versionId":"faf670de-c264-491a-abd7-6888a9d27df0",
-    "meta":{"instanceId":"c02765b3d48907a0cfe332f8906beb07472eb5d5f52b81b8b1f6893ff9c1b6dd"},
-    "id":"dhGuqCOx4kgI9jQq",
-    "tags":[]
-  }'>
-</n8n-demo>
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [240, 208],
+      "id": "be40f7ab-bb5d-49e0-9805-1ed40cb8b8e0",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "q9qSyL39jNfT4P44",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": { "contextWindowLength": 20 },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [384, 208],
+      "id": "668d7bfb-c2a4-485f-8a14-3c301dc8842e",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0",
+          "mode": "list",
+          "cachedResultName": "Career Advisor LTM",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Memory",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "User": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI(\"User\", \"The name of the user\", \"string\") }}",
+            "Memory": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI(\"Memory\", \"The memory to be stored\", \"string\") }}",
+            "Date": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "User", "displayName": "User", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Memory", "displayName": "Memory", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Date", "displayName": "Date", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [656, 208],
+      "id": "6c74f423-9abd-4063-905e-a4bf8b03fdc1",
+      "name": "Store Long Term Memory",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nUwqmFJ6dxkuSZt2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0",
+          "mode": "list",
+          "cachedResultName": "Career Advisor LTM",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Memory",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lQcBMSf5Qrao3D9bubn-1c4pR_kbpHta3gOQWatx9b0/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "User",
+              "lookupValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI(\"values0_Value\", \"The name of the user which memories we want\", \"string\") }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [800, 160],
+      "id": "31c4153a-315a-48fa-aa0f-9051b5235aaa",
+      "name": "Retrieve Memories",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nUwqmFJ6dxkuSZt2",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
+    "Google Gemini Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
+    "Simple Memory": { "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]] },
+    "Store Long Term Memory": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "Retrieve Memories": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "faf670de-c264-491a-abd7-6888a9d27df0",
+  "meta": { "instanceId": "c02765b3d48907a0cfe332f8906beb07472eb5d5f52b81b8b1f6893ff9c1b6dd" },
+  "id": "dhGuqCOx4kgI9jQq",
+  "tags": []
+}
+</script>
+
+<!-- 2) Your n8n web component -->
+<n8n-demo id="career" clicktointeract="true" frame="true"></n8n-demo>
+
+<!-- 3) Assign the JSON to the workflow attribute AFTER the DOM loads -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('career');
+    const json = document.getElementById('career-json').textContent.trim();
+    // Optionally validate:
+    try { JSON.parse(json); } catch (e) { console.error('Workflow JSON invalid:', e); }
+    el.setAttribute('workflow', json);
+  });
+</script>  
 </div>
 </body>
 </html>
