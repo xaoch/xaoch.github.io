@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>n8n Chat Widget Preview</title>
+  <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>n8n Chat Widget Preview</h1>
+  <p>The chat widget should appear in the bottom-right corner of this page.</p>
+
+  <script type="module">
+    import { createChat } from 'https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js';
+
+    createChat({
+      webhookUrl: 'https://xaochNYU-n8n-free.hf.space/webhook/984bf944-8224-43c6-b2d2-40cb23ec6bb1/chat'
+    });
+  </script>
+</body>
+</html>
