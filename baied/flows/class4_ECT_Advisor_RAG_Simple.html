@@ -4,6 +4,22 @@
     <script src="https://cdn.jsdelivr.net/npm/@webcomponents/webcomponentsjs@2.0.0/webcomponents-loader.js"></script>
     <script src="https://www.unpkg.com/lit@2.0.0-rc.2/polyfill-support.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@n8n_io/n8n-demo-component/n8n-demo.bundled.js"></script>
+    <script>
+    // Decode Base64 and set workflow attribute for all n8n-demo elements
+    const demos = document.querySelectorAll('n8n-demo');
+    demos.forEach(demo => {
+        const workflowAttr = demo.getAttribute('workflow');
+        if (workflowAttr && workflowAttr.startsWith('base64:')) {
+            const base64Data = workflowAttr.replace('base64:', '');
+            try {
+                const decodedJson = decodeURIComponent(escape(atob(base64Data)));
+                demo.setAttribute('workflow', decodedJson);
+            } catch (e) {
+                console.error('Error decoding Base64 workflow:', e);
+            }
+        }
+    });
+</script>
     <style>
         n8n-demo {
             --n8n-frame-background-color: black;
