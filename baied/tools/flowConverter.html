@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON to Base64 Converter for n8n-demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+        }
+        #demoContainer {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>JSON to Base64 Converter for n8n-demo</h1>
+
+    <h3>Paste your JSON here:</h3>
+    <textarea id="jsonInput" placeholder="Paste your JSON here..."></textarea>
+
+    <h3>n8n-demo Preview:</h3>
+    <div id="demoContainer"></div>
+
+    <h3>n8n-demo Tag with Base64:</h3>
+    <textarea id="n8nDemoTag" readonly placeholder="n8n-demo tag will appear here..." style="height: 100px;"></textarea>
+    <button onclick="copyN8nDemoTag()">Copy n8n-demo Tag</button>
+
+    <h3>Decoding Script (include this in your HTML):</h3>
+    <textarea id="scriptOutput" readonly placeholder="Decoding script will appear here..." style="height: 150px;"></textarea>
+    <button onclick="copyScript()">Copy Script</button>
+
+    <!-- Required scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@webcomponents/webcomponentsjs@2.0.0/webcomponents-loader.js"></script>
+    <script src="https://www.unpkg.com/lit@2.0.0-rc.2/polyfill-support.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@n8n_io/n8n-demo-component/n8n-demo.bundled.js"></script>
+
+    <script>
+        const jsonInput = document.getElementById('jsonInput');
+        const demoContainer = document.getElementById('demoContainer');
+        const n8nDemoTag = document.getElementById('n8nDemoTag');
+        const scriptOutput = document.getElementById('scriptOutput');
+        let n8nDemo = null;
+
+        jsonInput.addEventListener('input', updateDemo);
+
+        // Function to encode Unicode string to Base64
+        function encodeToBase64(str) {
+            return btoa(unescape(encodeURIComponent(str)));
+        }
+
+        // Function to decode Base64 back to Unicode string
+        function decodeFromBase64(str) {
+            return decodeURIComponent(escape(atob(str)));
+        }
+
+        function updateDemo() {
+            try {
+                const input = jsonInput.value.trim();
+
+                if (!input) {
+                    if (n8nDemo) {
+                        demoContainer.removeChild(n8nDemo);
+                        n8nDemo = null;
+                    }
+                    n8nDemoTag.value = '';
+                    scriptOutput.value = '';
+                    return;
+                }
+
+                // Parse to validate JSON
+                const parsedJson = JSON.parse(input);
+                const workflowString = JSON.stringify(parsedJson);
+                const base64Encoded = encodeToBase64(workflowString); // Convert to Base64 with Unicode support
+
+                // Create or update n8n-demo component for preview
+                if (!n8nDemo) {
+                    n8nDemo = document.createElement('n8n-demo');
+                    n8nDemo.setAttribute('clicktointeract', 'true');
+                    demoContainer.appendChild(n8nDemo);
+                }
+                n8nDemo.setAttribute('workflow', workflowString);
+
+                // Generate n8n-demo tag with Base64
+                const n8nDemoTagContent = '<n8n-demo clicktointeract="true" workflow="base64:' + base64Encoded + '"></n8n-demo>';
+
+                // Generate decoding script
+                const scriptContent = '<script>\n' +
+                    '    // Decode Base64 and set workflow attribute for all n8n-demo elements\n' +
+                    '    const demos = document.querySelectorAll(\'n8n-demo\');\n' +
+                    '    demos.forEach(demo => {\n' +
+                    '        const workflowAttr = demo.getAttribute(\'workflow\');\n' +
+                    '        if (workflowAttr && workflowAttr.startsWith(\'base64:\')) {\n' +
+                    '            const base64Data = workflowAttr.replace(\'base64:\', \'\');\n' +
+                    '            try {\n' +
+                    '                const decodedJson = decodeURIComponent(escape(atob(base64Data)));\n' +
+                    '                demo.setAttribute(\'workflow\', decodedJson);\n' +
+                    '            } catch (e) {\n' +
+                    '                console.error(\'Error decoding Base64 workflow:\', e);\n' +
+                    '            }\n' +
+                    '        }\n' +
+                    '    });\n' +
+                    '<\/script>';
+
+                n8nDemoTag.value = n8nDemoTagContent;
+                scriptOutput.value = scriptContent;
+            } catch (error) {
+                if (n8nDemo) {
+                    demoContainer.removeChild(n8nDemo);
+                    n8nDemo = null;
+                }
+                n8nDemoTag.value = 'Invalid JSON: ' + error.message;
+                scriptOutput.value = '';
+            }
+        }
+
+        function copyN8nDemoTag() {
+            if (n8nDemoTag.value && !n8nDemoTag.value.startsWith('Invalid JSON')) {
+                n8nDemoTag.select();
+                document.execCommand('copy');
+            } else {
+                alert('Nothing to copy - please enter valid JSON first');
+            }
+        }
+
+        function copyScript() {
+            if (scriptOutput.value) {
+                scriptOutput.select();
+                document.execCommand('copy');
+            } else {
+                alert('Nothing to copy - please enter valid JSON first');
+            }
+        }
+    </script>
+</body>
+</html>
